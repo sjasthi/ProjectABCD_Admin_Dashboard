@@ -32,7 +32,7 @@ dest_language = "ZH" #Chinese language
 translation_engine = 'DeepL'
 
 """ DeepL API integration"""
-auth_key = "6bd0d1df-69ed-1ff3-374c-bc280b44f5e0:fx"  #(auth_key) Replace with your key
+auth_key = "6bd0d1df-69ed-1ff3-**************"  #(auth_key) Replace with your key
 translator = deepl.Translator(auth_key)
 
 #DeepL API testing
