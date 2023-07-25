@@ -9,3 +9,9 @@ pip install --upgrade deepl """
 
 <img width="712" alt="DeepL" src="https://github.com/sjasthi/ics499_cougars_Quiz_n_translate/assets/133614821/5844cc6f-187b-409c-a0cc-ac006857637c">
 
+DeepL only supports these languages for text translation, very limited:
+
+
+![image](https://github.com/sjasthi/ics499_cougars_Quiz_n_translate/assets/133614821/90de959a-0459-4317-8ef2-cdd7b3274080)
+
+
