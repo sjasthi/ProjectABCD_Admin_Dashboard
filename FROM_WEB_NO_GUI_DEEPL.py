@@ -13,7 +13,7 @@ import deepl
 
 """ Text translation using DeepL API!!!
 -To use the DeepL Python Library, you'll need an API authentication key.
-To get a key, please create an account here. 
+To get a key, please create an account here --> https://www.deepl.com/docs-api/api-access/
 With a DeepL API Free account you can translate up to 500,000 characters/month for free.
 
 Installation
