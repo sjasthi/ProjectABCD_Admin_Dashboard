@@ -71,7 +71,7 @@ inp = str(selectFromDict(TranslationEngines, 'Engine'))
 #print("input: ", inp)
 
 """ DeepL API integration"""
-auth_key = "6bd0d1df-69ed-1ff3-374c-bc280b44f5e0:fx"  # (auth_key) Replace with your key
+auth_key = "6bd0d1df-69ed-1ff3-374c-bc2808****************"  # (auth_key) Replace with your key
 translator = deepl.Translator(auth_key)
 
 # DeepL API testing
@@ -336,7 +336,7 @@ def GoogleTranslator2(printFact, dest_language):
 
 
 # Function to translate text using ChatGPT API
-APIKey = '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'
+APIKey = 'sk-ByZkXS3U*******CVaUVbT3BlbkFJt5iexA31g*******' # replace with your Key
 
 openai.api_key = APIKey
 
