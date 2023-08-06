@@ -15,7 +15,12 @@ from deep_translator import GoogleTranslator
 import openai
 import time
 
-""" Text translation using DeepL API!!!
+""" 
+This program uses different APIs to do a text translation and creates a powerpoint slides to show the output.
+
+APIs: Google Translate , Azure Translate, ChatGPT Translate, and DeepL Translate.
+
+Text translation using DeepL API!!!
 -To use the DeepL Python Library, you'll need an API authentication key. 
 To get a key, please create an account here -->https://www.deepl.com/docs-api/api-access/
 With a DeepL API Free account you can translate up to 500,000 characters/month for free.
@@ -40,6 +45,7 @@ TranslationEngines['AzureAPI'] = 'Azure'
 TranslationEngines['GoogleAPI'] = 'Google'
 TranslationEngines['ChatGPTAPI'] = 'ChatGPT'
 
+#function to provide users with a list of options to choose from
 def selectFromDict(options, Engine):
     index = 0
 
@@ -67,11 +73,11 @@ def selectFromDict(options, Engine):
     print(selected)
 
 inp = str(selectFromDict(TranslationEngines, 'Engine'))
-# inp=True
+
 #print("input: ", inp)
 
 """ DeepL API integration"""
-auth_key = "6bd0d1df-69ed-1ff3-374c-bc2808****************"  # (auth_key) Replace with your key
+auth_key = "6bd0d1df-69ed-1ff3-374c-bc280b44f5e0:fx"  # (auth_key) Replace with your key
 translator = deepl.Translator(auth_key)
 
 # DeepL API testing
@@ -336,7 +342,7 @@ def GoogleTranslator2(printFact, dest_language):
 
 
 # Function to translate text using ChatGPT API
-APIKey = 'sk-ByZkXS3U*******CVaUVbT3BlbkFJt5iexA31g*******' # replace with your Key
+APIKey = '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'
 
 openai.api_key = APIKey
 
