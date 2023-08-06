@@ -102,7 +102,7 @@ for row in random_results:
         slide_count += 1
 
 # Add the code snippet as an image
-        img_path = "/xampp/htdocs/QuizMasterDB-master/" + row[8]
+        img_path = "D:/MyXampp/htdocs/QuizMasterDB/" + row[8]
         if os.path.exists(img_path):
             try:
                 left = Inches(1)
@@ -139,7 +139,7 @@ if show_answers:
 
 
 # Save the PowerPoint presentation to a file
-presentation.save("/Users/NickZ/Documents/ICS 499/Final Project/fp4test.pptx")
+presentation.save("/Users/Laith/Documents/images/fp4test.pptx")
 
 cursor.close()
 conn.close()
