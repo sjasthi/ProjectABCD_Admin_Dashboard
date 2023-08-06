@@ -18,3 +18,9 @@ DeepL only supports these languages for text translation, very limited:
 ![image](https://github.com/sjasthi/ics499_cougars_Quiz_n_translate/assets/133614821/90de959a-0459-4317-8ef2-cdd7b3274080)
 
 
+Added a list of options for all the Translate APIs/Engines . users can now enter the engine number and the program will pick the API to use for translations....
+
+
+![image](https://github.com/sjasthi/ics499_cougars_Quiz_n_translate/assets/133614821/fd5f30e2-ba58-4ed3-b585-30fbc763e6ba)
+
+
