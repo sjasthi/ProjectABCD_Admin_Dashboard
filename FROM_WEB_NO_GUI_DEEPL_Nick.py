@@ -21,8 +21,11 @@ The library can be installed from PyPI using pip:
 
 pip install --upgrade deepl """
 
+# slideOption controls layout of powerpoint. This program supports options 1, 4, and 5. 
+# 1 for default layout, 4 for landscape with text on the left, 5 for landscape with picture on the left
+
 methods = "Web"
-slideOption = 1
+slideOption = 4
 textFont = titleFont = "NATS"
 textSize = 13
 titleSize = 2
@@ -32,7 +35,7 @@ dest_language = "ZH" #Chinese language
 translation_engine = 'DeepL'
 
 """ DeepL API integration"""
-auth_key = "6bd0d1df-69ed-1ff3-**************"  #(auth_key) Replace with your key
+auth_key = "b756986e-67d1-762d-cb6f-0971053d969d:fx"  #(auth_key) Replace with your key
 translator = deepl.Translator(auth_key)
 
 #DeepL API testing
@@ -135,42 +138,33 @@ def buildPresentation():
             FunFactParagraph.font.name = textFont
             FunFactParagraph.font.size = Pt(textSize)
             FunFactParagraph.text = printFact
-        # creates the slide presentation if slide option 2 is chosen
-        elif (slideOption == 2):
-            # creates the slide layout preferences
+        # creates the slide presentation if slide option 4 is chosen
+        elif (slideOption == 4):
+             # creates slide preferences
             slide_layout = prs.slide_layouts[6]
-            prs.slide_width = pptx.util.Inches(8)
-            prs.slide_height = pptx.util.Inches(11)
-            # creates a title page
-            if (i == 0):
-                slide = prs.slides.add_slide(slide_layout)
-                titleBox = slide.shapes.add_textbox(pptx.util.Inches(2.5), pptx.util.Inches(1.5),
-                                                    width=pptx.util.Inches(3), height=pptx.util.Inches(2))
-                titleBoxtf = titleBox.text_frame
-                title = titleBoxtf.add_paragraph()
-                title.text = "Project abcd abdul"
-                title.font.size = Pt(50)
-                title.font.name = titleFont
-            slide = prs.slides.add_slide(slide_layout)
-            # places the picture to cover the whole slide
-            pictureHolder = prs.slides[i + 1].shapes
-            pictureHolder.add_picture(basename(printImage), pptx.util.Inches(4), pptx.util.Inches(2),
+            prs.slide_width = pptx.util.Inches(11)
+            prs.slide_height = pptx.util.Inches(8)
+            slide2 = prs.slides.add_slide(slide_layout)
+            # places picture to cover whole slide
+            pictureHolder = prs.slides[pictureSlide].shapes
+            pictureHolder.add_picture(basename(printImage), pptx.util.Inches(6), pptx.util.Inches(1),
                                       width=pptx.util.Inches(4), height=pptx.util.Inches(6))
             # creates next slide
-            # places the logo on the slide
-            logoHolder = slide.shapes.add_picture(basename(printLogo), pptx.util.Inches(7), pptx.util.Inches(0),
-                                                  width=pptx.util.Inches(1), height=pptx.util.Inches(1))
-            # places title on the slide
-            titleBox = slide.shapes.add_textbox(pptx.util.Inches(2), pptx.util.Inches(1.5),
-                                                width=pptx.util.Inches(2), height=pptx.util.Inches(1))
+
+            # place logo on the slide
+            logoHolder = slide2.shapes.add_picture(basename(printLogo), pptx.util.Inches(5.5), pptx.util.Inches(0),
+                                                   width=pptx.util.Inches(1), height=pptx.util.Inches(1))
+            # places the title
+            titleBox = slide2.shapes.add_textbox(pptx.util.Inches(4), pptx.util.Inches(1.5),
+                                                 width=pptx.util.Inches(2), height=pptx.util.Inches(1))
             titleBoxtf = titleBox.text_frame
             title = titleBoxtf.add_paragraph()
             title.text = printName
             title.font.size = Pt(titleSize)
             title.font.name = titleFont
             # creates textbox for description and fun fact
-            contentBox = slide.shapes.add_textbox(pptx.util.Inches(1), pptx.util.Inches(2),
-                                                  width=pptx.util.Inches(3), height=pptx.util.Inches(4))
+            contentBox = slide2.shapes.add_textbox(pptx.util.Inches(1), pptx.util.Inches(1),
+                                                   width=pptx.util.Inches(3), height=pptx.util.Inches(4))
             contentBoxtf = contentBox.text_frame
             contentBoxtf.word_wrap = True
             descriptionTitle = contentBoxtf.add_paragraph()
@@ -191,22 +185,23 @@ def buildPresentation():
             FunFactParagraph.font.name = textFont
             FunFactParagraph.font.size = Pt(textSize)
             FunFactParagraph.text = printFact
+            pictureSlide = pictureSlide + 1
 
-        # creates the slide presentation if slide option 3 is chosen
-        elif (slideOption == 3):
+        # creates the slide presentation if slide option 5 is chosen
+        elif (slideOption == 5):
             # creates slide preferences
             slide_layout = prs.slide_layouts[6]
-            prs.slide_width = pptx.util.Inches(8)
-            prs.slide_height = pptx.util.Inches(11)
+            prs.slide_width = pptx.util.Inches(11)
+            prs.slide_height = pptx.util.Inches(8)
             slide2 = prs.slides.add_slide(slide_layout)
             # places picture to cover whole slide
             pictureHolder = prs.slides[pictureSlide].shapes
-            pictureHolder.add_picture(basename(printImage), pptx.util.Inches(0), pptx.util.Inches(2),
+            pictureHolder.add_picture(basename(printImage), pptx.util.Inches(1), pptx.util.Inches(1),
                                       width=pptx.util.Inches(4), height=pptx.util.Inches(6))
             # creates next slide
 
             # place logo on the slide
-            logoHolder = slide2.shapes.add_picture(basename(printLogo), pptx.util.Inches(7), pptx.util.Inches(0),
+            logoHolder = slide2.shapes.add_picture(basename(printLogo), pptx.util.Inches(5), pptx.util.Inches(0),
                                                    width=pptx.util.Inches(1), height=pptx.util.Inches(1))
             # places the title
             titleBox = slide2.shapes.add_textbox(pptx.util.Inches(4), pptx.util.Inches(1.5),
@@ -217,7 +212,7 @@ def buildPresentation():
             title.font.size = Pt(titleSize)
             title.font.name = titleFont
             # creates textbox for description and fun fact
-            contentBox = slide2.shapes.add_textbox(pptx.util.Inches(4), pptx.util.Inches(2),
+            contentBox = slide2.shapes.add_textbox(pptx.util.Inches(7), pptx.util.Inches(1),
                                                    width=pptx.util.Inches(3), height=pptx.util.Inches(4))
             contentBoxtf = contentBox.text_frame
             contentBoxtf.word_wrap = True
