@@ -20,7 +20,7 @@ This program uses different APIs to do a text translation and creates a powerpoi
 
 APIs: Google Translate , Azure Translate, ChatGPT Translate, and DeepL Translate.
 
-Text translation using DeepL API!!!
+Text translation using DeepL API!
 -To use the DeepL Python Library, you'll need an API authentication key. 
 To get a key, please create an account here -->https://www.deepl.com/docs-api/api-access/
 With a DeepL API Free account you can translate up to 500,000 characters/month for free.
@@ -77,7 +77,7 @@ inp = str(selectFromDict(TranslationEngines, 'Engine'))
 #print("input: ", inp)
 
 """ DeepL API integration"""
-auth_key = "6bd0d1df-69ed-1ff3-374c-bc280b44f5e0:fx"  # (auth_key) Replace with your key
+auth_key = "6bd0d1df-69ed-1ff3-**************"  # (auth_key) Replace with your key
 translator = deepl.Translator(auth_key)
 
 # DeepL API testing
@@ -342,7 +342,7 @@ def GoogleTranslator2(printFact, dest_language):
 
 
 # Function to translate text using ChatGPT API
-APIKey = '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'
+APIKey = 'sk-ByZkXS3Ur7YQHTCVaUVbT3****************' # replace with your key
 
 openai.api_key = APIKey
 
