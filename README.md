@@ -1,4 +1,4 @@
-# Project ABCD - Admin Tool
+# Project ABCD - Admin Dashboard
 
 ## 1. Admin Panel (TKinter)
 
