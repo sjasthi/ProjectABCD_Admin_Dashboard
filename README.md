@@ -1,4 +1,4 @@
-# Python and Google Translation
+# Project ABCD, Book compilation and Transalations
 
 Version 1: We explored several translation tools.
 
