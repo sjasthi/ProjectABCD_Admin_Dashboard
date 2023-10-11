@@ -1,6 +1,6 @@
-import sys, io, requests, threading, webbrowser, urllib, os
+import sys, io, requests, threading, webbrowser, urllib, os, platform
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 from pptx import Presentation
 import pptx.util
 from pptx.util import Inches, Pt
@@ -127,8 +127,118 @@ def generateUpdate():
         urllib.request.install_opener(opener)
         urllib.request.urlretrieve(img_url, img_path)
 
+        if layout.get() == 1: # layout 1 == picture on left page - text on right page
+            prs.slide_width = pptx.util.Inches(6.05)
+            prs.slide_height = pptx.util.Inches(8.22)
+            # Choose a slide layout that has a content placeholder at index 1
+            image_slide_layout = prs.slide_layouts[6]  # Index 1 often corresponds to a title and content layout
 
-        if layout.get() == 2: # layout 2 == pictrue on right - text on left
+            # Add a slide with the chosen layout
+            image_slide = prs.slides.add_slide(image_slide_layout)
+
+            # Creates another slide for text
+            text_slide_layout = prs.slide_layouts[6]  
+            text_slide = prs.slides.add_slide(text_slide_layout)
+
+            # title
+            left = Inches(0.5)
+            top = Inches(0.3)
+            width = Inches(4.99)
+            height = Inches(1.25)   
+            title_box1 = image_slide.shapes.add_textbox(left, top, width, height)
+            title_box1f = title_box1.text_frame
+
+            title = title_box1f.add_paragraph()
+            title.alignment = PP_ALIGN.CENTER
+            title.font.name = title_font_var.get()
+            title.font.size = Pt(int(title_size_var.get()))
+            title.text = f'{dress_name.upper()}'
+
+            # image
+            left = Inches(0.18)
+            top = Inches(1.72)
+            width = Inches(4)
+            height = Inches(5.7) 
+            picture = image_slide.shapes.add_picture(f'./images/{dress_info["image_url"]}', left, top, width, height)
+
+            # text box
+            left = Inches(0.5)
+            top = Inches(1.32)
+            width = Inches(4.73)
+            height = Inches(5.28)   
+            text_box1 = text_slide.shapes.add_textbox(left, top, width, height)
+            text_box1f = text_box1.text_frame
+            text_box1f.word_wrap = True
+
+            description_subtitle = text_box1f.add_paragraph()
+            description_subtitle.font.name = subtitle_font_var.get()
+            description_subtitle.font.bold = True
+            description_subtitle.font.size = Pt(int(subtitle_size_var.get()))
+            description_subtitle.text = translateText("DESCRIPTION:")
+
+            description_text = text_box1f.add_paragraph()
+            description_text.font.name = text_font_var.get()
+            description_text.font.size = Pt(int(text_size_var.get()))
+            description_text.text = f'{translateText(dress_description)}'
+
+            did_you_know_subtitle = text_box1f.add_paragraph()
+            did_you_know_subtitle.font.name = subtitle_font_var.get()
+            did_you_know_subtitle.font.bold = True
+            did_you_know_subtitle.font.size = Pt(int(subtitle_size_var.get()))
+            did_you_know_subtitle.text =  f'\n{translateText("DID YOU KNOW?")}'
+
+            did_you_know_text = text_box1f.add_paragraph()
+            did_you_know_text.font.name = text_font_var.get()
+            did_you_know_text.font.size = Pt(int(text_size_var.get()))
+            did_you_know_text.text = f'{translateText(dress_did_you_know)}'
+
+            if numbering.get() == 1: # show page number and dress id
+                #dress id
+                left = Inches(2.82)
+                top = Inches(7.42)
+                width = Inches(1.28)
+                height = Inches(0.4)   
+                dress_id_box1 = image_slide.shapes.add_textbox(left, top, width, height)
+                dress_id_box1f = dress_id_box1.text_frame
+
+                dress_id = dress_id_box1f.add_paragraph()
+                dress_id.text = f'Dress ID: {dress_info["id"]}'
+
+                # page number
+                left = Inches(4.56)
+                top = Inches(7.42)
+                width = Inches(1.28)
+                height = Inches(0.4)   
+                page_number_box1 = image_slide.shapes.add_textbox(left, top, width, height)
+                page_number_box1f = page_number_box1.text_frame
+
+                page_number = page_number_box1f.add_paragraph()
+                page_number.text = f'Page No. {index+1}'
+
+            elif numbering.get() == 2: # show page number
+                # page number
+                left = Inches(4.56)
+                top = Inches(7.42)
+                width = Inches(1.28)
+                height = Inches(0.4)   
+                page_number_box1 = image_slide.shapes.add_textbox(left, top, width, height)
+                page_number_box1f = page_number_box1.text_frame
+
+                page_number = page_number_box1f.add_paragraph()
+                page_number.text = f'Page No. {index+1}'
+            
+            elif numbering.get() == 3: # show dress id
+                #dress id
+                left = Inches(4.56)
+                top = Inches(7.42)
+                width = Inches(1.28)
+                height = Inches(0.4)   
+                dress_id_box1 = image_slide.shapes.add_textbox(left, top, width, height)
+                dress_id_box1f = dress_id_box1.text_frame
+
+                dress_id = dress_id_box1f.add_paragraph()
+                dress_id.text = f'Dress ID: {dress_info["id"]}'
+        elif layout.get() == 2: # layout 2 == picture on right - text on left
             prs.slide_width = pptx.util.Inches(11.69)
             prs.slide_height = pptx.util.Inches(8.27)
             slide_layout = prs.slide_layouts[6]
@@ -148,7 +258,7 @@ def generateUpdate():
             title.alignment = PP_ALIGN.CENTER
             title.font.name = title_font_var.get()
             title.font.size = Pt(int(title_size_var.get()))
-            title.text = f'{dress_name}'
+            title.text = f'{dress_name.upper()}'
 
             # image
             left = Inches(7.07)
@@ -169,8 +279,8 @@ def generateUpdate():
             description_subtitle = text_box1f.add_paragraph()
             description_subtitle.font.name = subtitle_font_var.get()
             description_subtitle.font.bold = True
-            description_subtitle.font.size = Pt(int(title_size_var.get()))
-            description_subtitle.text = translateText("Description: ")
+            description_subtitle.font.size = Pt(int(subtitle_size_var.get()))
+            description_subtitle.text = translateText("DESCRIPTION:")
 
             description_text = text_box1f.add_paragraph()
             description_text.font.name = text_font_var.get()
@@ -181,7 +291,7 @@ def generateUpdate():
             did_you_know_subtitle.font.name = subtitle_font_var.get()
             did_you_know_subtitle.font.bold = True
             did_you_know_subtitle.font.size = Pt(int(subtitle_size_var.get()))
-            did_you_know_subtitle.text =  f'\n{translateText("Did you know")}'
+            did_you_know_subtitle.text =  f'\n{translateText("DID YOU KNOW?")}'
 
             did_you_know_text = text_box1f.add_paragraph()
             did_you_know_text.font.name = text_font_var.get()
@@ -256,7 +366,7 @@ def generateUpdate():
             title.alignment = PP_ALIGN.CENTER
             title.font.name = title_font_var.get()
             title.font.size = Pt(int(title_size_var.get()))
-            title.text = f'{dress_name}'
+            title.text = f'{dress_name.upper()}'
 
             # image
             left = Inches(0.18)
@@ -277,8 +387,8 @@ def generateUpdate():
             description_subtitle = text_box1f.add_paragraph()
             description_subtitle.font.name = subtitle_font_var.get()
             description_subtitle.font.bold = True
-            description_subtitle.font.size = Pt(int(title_size_var.get()))
-            description_subtitle.text = translateText("Description: ")
+            description_subtitle.font.size = Pt(int(subtitle_size_var.get()))
+            description_subtitle.text = translateText("DESCRIPTION:")
 
             description_text = text_box1f.add_paragraph()
             description_text.font.name = text_font_var.get()
@@ -289,7 +399,7 @@ def generateUpdate():
             did_you_know_subtitle.font.name = subtitle_font_var.get()
             did_you_know_subtitle.font.bold = True
             did_you_know_subtitle.font.size = Pt(int(subtitle_size_var.get()))
-            did_you_know_subtitle.text =  f'\n{translateText("Did you know")}'
+            did_you_know_subtitle.text =  f'\n{translateText("DID YOU KNOW?")}'
 
             did_you_know_text = text_box1f.add_paragraph()
             did_you_know_text.font.name = text_font_var.get()
@@ -343,6 +453,7 @@ def generateUpdate():
                 dress_id = dress_id_box1f.add_paragraph()
                 dress_id.text = f'Dress ID: {dress_info["id"]}'
 
+        
     try:
         prs.save('abcdbook.pptx')
     except:
@@ -350,6 +461,21 @@ def generateUpdate():
         print("Access to abcdbook.pptx denied. Make sure it is not currently open")
     finally:
         generate_button.config(state="normal")
+
+    # Opens ppt depending on OS
+    current_os = platform.system()
+    try:
+        if current_os == "Windows":
+            os.system("start abcdbook.pptx")
+        elif current_os == "Darwin":
+            os.system("open abcdbook.pptx")
+        elif current_os == "Linux":
+            os.system("xdg-open abcdbook.pptx")
+        else:
+            print("Error: Cannot open file " + current_os + " not supported.")
+    except Exception as e:
+        print("Error:", e)
+
 
 '''
 Spins up new thread to run generateUpdate method
