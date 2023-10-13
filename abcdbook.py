@@ -454,7 +454,13 @@ def generateUpdate():
                 dress_id.text = f'Dress ID: {dress_info["id"]}'
 
         
-    prs.save('abcdbook.pptx')
+    try:
+        prs.save('abcdbook.pptx')
+    except:
+        tk.messagebox.showerror(title="Error", message="Access to abcdbook.pptx denied. Make sure there is not an abcdbook.pptx currently open")
+        print("Access to abcdbook.pptx denied. Make sure it is not currently open")
+    finally:
+        generate_button.config(state="normal")
 
     # Opens ppt depending on OS
     current_os = platform.system()
@@ -470,7 +476,6 @@ def generateUpdate():
     except Exception as e:
         print("Error:", e)
 
-    generate_button.config(state="normal")
 
 '''
 Spins up new thread to run generateUpdate method
