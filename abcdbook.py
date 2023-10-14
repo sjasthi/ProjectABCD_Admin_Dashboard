@@ -1,4 +1,4 @@
-import sys, io, requests, threading, webbrowser, urllib, os, platform
+import sys, io, requests, threading, webbrowser, urllib, os, platform, openpyxl
 import tkinter as tk
 from tkinter import ttk
 from pptx import Presentation
@@ -49,6 +49,7 @@ def getDressInfoFromAPI(sorted_dress_ids):
             print(f'Request for dress ID: {id_number} failed.')
 
     return dress_data
+
 
 '''
 Translate text to selected language 
@@ -453,7 +454,7 @@ def generateUpdate():
                 dress_id = dress_id_box1f.add_paragraph()
                 dress_id.text = f'Dress ID: {dress_info["id"]}'
 
-        
+
     try:
         prs.save('abcdbook.pptx')
     except:
@@ -478,6 +479,74 @@ def generateUpdate():
 
 
 '''
+Search through API to retrieve info on matching dress name
+'''
+def getDressInfoFromAPIByName(find_name):
+    # loops through all dress and find matching dress name
+    for id_number in range(1, 826):
+        response = requests.get(f'https://abcd2.projectabcd.com/api/getinfo.php?id={id_number}', headers={"User-Agent": "XY"})
+        # append dress info to dress data if response status_code == 200
+        if response.ok:
+            data = response.json()['data']
+
+            # checks if names are a match and exit function
+            if "name" in data and data['name'] == find_name:
+                return data
+        else:
+            print(f'Request for dress ID: {id_number} failed.')
+    return None
+
+'''
+Opens excel file & gets data
+'''
+def openExcelFile():
+    file_path = 'Project ABCD  dresses.xlsx' # Change to path where file is located
+
+    excel_dress_data = []
+    try:
+        # Open the Excel file
+        workbook = openpyxl.load_workbook(file_path)
+
+        # Select a specific sheet from the Excel file
+        sheet_name = 'Sheet1' # Replace with sheet name
+
+        print ("Changes was made to the following dresses:")
+
+        # if sheet name exist if changes
+        if sheet_name in workbook.sheetnames:
+            sheet = workbook[sheet_name]
+
+            # iterate over rows, starting from the third row (row 3)
+            for row in sheet.iter_rows(min_row=3, values_only=True):
+                current_cell = 0
+                # iterate over each cell & store data
+                for cell in row:
+                    current_cell += 1
+                    # checks for empty cells
+                    if cell is not None and current_cell:
+                        excel_dress_data.append(cell)
+                    else:
+                        excel_dress_data.append(None)
+
+                    # skips image & display
+                    if current_cell == 7:
+                        break 
+                
+                api_dress_data = getDressInfoFromAPIByName(excel_dress_data[0])
+
+                # checks for changes
+                if excel_dress_data[1] != api_dress_data['description'] or excel_dress_data[2] != api_dress_data['did_you_know'] or excel_dress_data[3] != api_dress_data['category'] or excel_dress_data[4] != api_dress_data['type'] or excel_dress_data[5] != api_dress_data['state_name'] or excel_dress_data[6] != api_dress_data['key_words']:
+                    print (f'ID: {api_dress_data["id"]}\t\tDress Name: {api_dress_data["name"]}')
+
+                excel_dress_data.clear()
+        else:
+            print(f"Sheet '{sheet_name}' does not exist in the Excel file.")
+
+    except FileNotFoundError:
+        print(f"File '{file_path}' not found.")
+
+
+'''
 Spins up new thread to run generateUpdate method
 '''
 def startThread():
@@ -495,6 +564,7 @@ def launchHelpSite():
     
     # open help site
     webbrowser.open('help.html')
+    openExcelFile()
 
 '''
 Main method  
