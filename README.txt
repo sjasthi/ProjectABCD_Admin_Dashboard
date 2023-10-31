@@ -18,3 +18,7 @@ Note: If you run into any errors you can try:
 
 -- pandas --
 pip install pandas
+
+-- TextBlob --
+pip install -U textblob
+python -m textblob.download_corpora
