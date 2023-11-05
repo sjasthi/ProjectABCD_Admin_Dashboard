@@ -78,16 +78,12 @@ def downloadAPIData(url, id_number):
 '''
 Sets up and starts threads for gathering API data
 '''
-def apiRunner(text_field):
+def apiRunner():
     # get update for dress number input
     update_dress_list = []
-    # check which text field to grab dress numbers from
-    if text_field == 'book_gen_text_field':
-        get_text_field = book_gen_text_field.get("1.0", "end-1c").split(',')
-    elif text_field == 'diff_report_text_field':
-        get_text_field = diff_report_text_field.get("1.0", "end-1c").split(',')
-    elif text_field == 'word_analysis_text_field':
-        get_text_field = word_analysis_text_field.get("1.0", "end-1c").split(',')
+    # get dress numbers from text field
+    get_text_field = text_field.get("1.0", "end-1c").split(',')
+    
 
     # add to list
     for number in get_text_field:
@@ -114,40 +110,6 @@ def apiRunner(text_field):
         for task in as_completed(threads):
             if task.result() is not None:
                 dress_data.append(task.result())
-
-    return dress_data
-
-'''
-Fetch the dress data from API
-'''
-def getDressInfoFromAPI():
-
-    # get update for dress number input
-    update_dress_list = []
-    get_text_field = book_gen_text_field.get("1.0", "end-1c").split(',')
-
-    # add to list
-    for number in get_text_field:
-        if (number.strip().isnumeric()):
-            update_dress_list.append(int(number.strip()))
-    
-    # remove duplicates
-    dress_ids = []
-    [dress_ids.append(x) for x in update_dress_list if x not in dress_ids]
-
-    # get dress data from API
-    dress_data = []
-    try:
-        for id_number in dress_ids:
-            response = requests.get(f'https://abcd2.projectabcd.com/api/getinfo.php?id={id_number}', headers={"User-Agent": "XY"})
-            # append dress info to dress data if response status_code == 200
-            if response.ok:
-                dress_data.append(response.json()['data'])
-            else:
-                print(f'Request for dress ID: {id_number} failed.')
-    except Exception as e:
-        tk.messagebox.showerror(title="Error", message=f'Could not make connection!\n\nError: {e}')
-        print(f'Error: {e}')
 
     return dress_data
 
@@ -187,7 +149,7 @@ Performs update once generate button clicked
 '''
 def generateBook():
     # gather all dress data from api
-    dress_data = apiRunner('book_gen_text_field')
+    dress_data = apiRunner()
     # sort dress data
     sorted_dress_data = sortDresses(dress_data)
 
@@ -663,7 +625,7 @@ def diffReport():
     file_path = 'APIData.xlsx' # Change to path where file is located
 
     diff_dress_data = [] # data in spreadsheet that is different from API
-    api_dress_data = sorted(apiRunner('diff_report_text_field'), key=lambda x : x['id']) # gets dress data from API and sorts by ID
+    api_dress_data = sorted(apiRunner(), key=lambda x : x['id']) # gets dress data from API and sorts by ID
 
     try:
         # gets and cleans dress data from Excel file
@@ -802,7 +764,7 @@ def wordAnalysis():
             print(table.item(item)['values'])
 
     word_analysis_data = [] # data from word analysis
-    api_dress_data = sorted(apiRunner('word_analysis_text_field'), key=lambda x : x['id']) # gets dress data from API and sorts by ID
+    api_dress_data = sorted(apiRunner(), key=lambda x : x['id']) # gets dress data from API and sorts by ID
 
     try:
         # cycle through api_dress_data for word analysis
@@ -956,12 +918,18 @@ def raiseFrame(frame):
         root.title("Project ABCD Admin Panel")
     elif frame == 'book_gen_frame':
         book_gen_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
         root.title("Project ABCD Book Generation")
     elif frame == 'diff_report_frame':
         diff_report_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
         root.title("Project ABCD Difference Report")
     elif frame == 'word_analysis_frame':
         word_analysis_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
         root.title("Project ABCD Word Analysis")
 
 
@@ -972,21 +940,36 @@ tk.Grid.rowconfigure(root, 0, weight=1)
 tk.Grid.columnconfigure(root, 0, weight=1)
 
 # main frame
-main_frame = tk.Frame(root, width=1000, height=600, bg="black")
+main_frame = tk.Frame(root, width=1000, height=600)
 main_frame.pack_propagate(False)
-main_frame.grid(row=0, column=0)
+main_frame.grid(row=0, column=0, sticky='news')
 
-# button to open book generation window
-book_gen_window_button = tk.Button(main_frame, text="Generate Book", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('book_gen_frame'))
-book_gen_window_button.pack(side='top', pady=20)
+#--------------------------------Main Title-----------------------------------------------------------------------------------------------
+# Create a label widget
+title_label = tk.Label(main_frame, text="Project ABCD\nMain Menu",  font=('Arial', 20))
+title_label.pack(pady=100)
 
-# button to open difference report window
-diff_report_window_button = tk.Button(main_frame, text="Difference Report", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('diff_report_frame'))
-diff_report_window_button.pack(side='top', pady=20)
+#--------------------------------Main Buttons-----------------------------------------------------------------------------------------------
+# Create buttons widget
+## Button settings
+main_button_frame = tk.Frame(main_frame)
+main_button_frame.place(relx=.5, rely=.5, anchor='center')
+button_width = 20
+button_height = 3
+button_bgd_color = "#007FFF"
+button_font_color = "#ffffff"
 
-# button to open word analysis window
-word_analysis_window_button = tk.Button(main_frame, text="Word Analysis", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('word_analysis_frame'))
-word_analysis_window_button.pack(side='top', pady=20)
+## Generate Book: Gets selected dress from API and import into ppt
+generate_book_button = tk.Button(main_button_frame, text="Generate Book", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('book_gen_frame'))
+generate_book_button.pack(side="left", padx=50)
+
+## Diff Report: Create a SQL file of dresses that got changed from excel sheet byt comparing to API
+diff_report_button = tk.Button(main_button_frame, text="Difference Report", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('diff_report_frame'))
+diff_report_button.pack(side="left", padx=50, anchor='center')
+
+## Generate Book: Get selected dress that user input & put into a table (ID, Name, Description Count, DYK Count, Total Nouns Count, Total Adjectives Count)
+word_analysis_report_button = tk.Button(main_button_frame, text="Word Analysis Report", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('word_analysis_frame'))
+word_analysis_report_button.pack(side="left", padx=50)
 
 
 #--------------------------------Book Gen Frame---------------------------------------------------------------------------------------------
@@ -994,22 +977,22 @@ word_analysis_window_button.pack(side='top', pady=20)
 # book gen frame
 book_gen_frame = tk.Frame(root, width=1000, height=600)
 book_gen_frame.pack_propagate(False)
-book_gen_frame.grid(row=0, column=0)
+book_gen_frame.grid(row=0, column=0, sticky='news')
 
 #--------------------------------Text Field-----------------------------------------------------------------------------------------------
 # text field label
-book_gen_text_field_label = tk.Label(book_gen_frame, text="Dress Numbers:", font=LABEL_FONT)
-book_gen_text_field_label.place(x=25, y=72.5)
+text_field_label = tk.Label(root, text="Dress Numbers:", font=LABEL_FONT)
+text_field_label.place(x=25, y=72.5)
 
 # text field
-book_gen_text_field = tk.Text(book_gen_frame)
-book_gen_text_field.place(x=175, y=10, width=800, height=135)
+text_field = tk.Text(root)
+text_field.place(x=175, y=10, relwidth=.8, height=135)
 
 # text field initialization
 try:
     with open('slide_numbers.txt', 'r') as file:
         slide_number_content = file.readline().strip()
-        book_gen_text_field.insert("1.0", slide_number_content)
+        text_field.insert("1.0", slide_number_content)
 except FileNotFoundError:
     print(FileNotFoundError)
 
@@ -1211,7 +1194,7 @@ check_button_frame.place(x=175, y=495)
 separator5 = ttk.Separator(book_gen_frame)
 separator5.place(x=175, y=495, relwidth=.8)
 
-#--------------------------------Generate, Help, and Difference Buttons--------------------------------------------------------------------------------------
+#--------------------------------Book Gen Buttons--------------------------------------------------------------------------------------
 # button frame
 book_gen_button_frame = tk.Frame(book_gen_frame)
 # generate button
@@ -1233,25 +1216,9 @@ book_gen_button_frame.pack(side="bottom", pady=10)
 #------------------------------------------------------------------------------------------------------------------------------------------------
 diff_report_frame = tk.Frame(root, width=1000, height=600)
 diff_report_frame.pack_propagate(False)
-diff_report_frame.grid(row=0, column=0)
+diff_report_frame.grid(row=0, column=0, sticky='news')
 
-#--------------------------------Text Field-----------------------------------------------------------------------------------------------
-# text field label
-diff_report_text_field_label = tk.Label(diff_report_frame, text="Dress Numbers:", font=LABEL_FONT)
-diff_report_text_field_label.place(x=25, y=72.5)
-
-# text field
-diff_report_text_field = tk.Text(diff_report_frame)
-diff_report_text_field.place(x=175, y=10, width=800, height=135)
-
-# text field initialization
-try:
-    with open('slide_numbers.txt', 'r') as file:
-        slide_number_content = file.readline().strip()
-        diff_report_text_field.insert("1.0", slide_number_content)
-except FileNotFoundError:
-    print(FileNotFoundError)
-
+#--------------------------------Diff Report Buttons-----------------------------------------------------------------------------------------------
 # button frame
 diff_report_button_frame = tk.Frame(diff_report_frame)
 # difference report button
@@ -1273,25 +1240,9 @@ diff_report_button_frame.pack(side="bottom", pady=10)
 #--------------------------------------------------------------------------------------------------------------------------------------------------
 word_analysis_frame = tk.Frame(root, width=1000, height=600)
 word_analysis_frame.pack_propagate(False)
-word_analysis_frame.grid(row=0, column=0)
+word_analysis_frame.grid(row=0, column=0, sticky='news')
 
-#--------------------------------Text Field-----------------------------------------------------------------------------------------------
-# text field label
-word_analysis_text_field_label = tk.Label(word_analysis_frame, text="Dress Numbers:", font=LABEL_FONT)
-word_analysis_text_field_label.place(x=25, y=72.5)
-
-# text field
-word_analysis_text_field = tk.Text(word_analysis_frame)
-word_analysis_text_field.place(x=175, y=10, width=800, height=135)
-
-# text field initialization
-try:
-    with open('slide_numbers.txt', 'r') as file:
-        slide_number_content = file.readline().strip()
-        word_analysis_text_field.insert("1.0", slide_number_content)
-except FileNotFoundError:
-    print(FileNotFoundError)
-
+#--------------------------------Word Analysis Buttons-----------------------------------------------------------------------------------------------
 # button frame
 word_analysis_button_frame = tk.Frame(word_analysis_frame)
 # word analysis button
