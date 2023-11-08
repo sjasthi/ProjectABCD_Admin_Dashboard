@@ -1023,6 +1023,11 @@ def raiseFrame(frame):
         text_field_label.tkraise()
         text_field.tkraise()
         root.title("Project ABCD Word Analysis")
+    elif frame == 'wiki_link_frame':
+        wiki_link_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
+        root.title("Project ABCD Wiki Link")
 
 
 #--------------------------------Main Frame-----------------------------------------------------------------------------------------------
@@ -1046,22 +1051,26 @@ title_label.pack(pady=100)
 ## Button settings
 main_button_frame = tk.Frame(main_frame)
 main_button_frame.place(relx=.5, rely=.5, anchor='center')
-button_width = 20
+button_width = 18
 button_height = 3
 button_bgd_color = "#007FFF"
 button_font_color = "#ffffff"
 
 ## Generate Book: Gets selected dress from API and import into ppt
 generate_book_button = tk.Button(main_button_frame, text="Generate Book", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('book_gen_frame'))
-generate_book_button.pack(side="left", padx=50)
+generate_book_button.pack(side="left", padx=10)
 
 ## Diff Report: Create a SQL file of dresses that got changed from excel sheet byt comparing to API
 diff_report_button = tk.Button(main_button_frame, text="Difference Report", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('diff_report_frame'))
-diff_report_button.pack(side="left", padx=50, anchor='center')
+diff_report_button.pack(side="left", padx=10, anchor='center')
 
 ## Generate Book: Get selected dress that user input & put into a table (ID, Name, Description Count, DYK Count, Total Nouns Count, Total Adjectives Count)
 word_analysis_report_button = tk.Button(main_button_frame, text="Word Analysis Report", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('word_analysis_frame'))
-word_analysis_report_button.pack(side="left", padx=50)
+word_analysis_report_button.pack(side="left", padx=10)
+
+## Wiki Link:
+wiki_link_button = tk.Button(main_button_frame, text="Wiki Link", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('wiki_link_frame'))
+wiki_link_button.pack(side="left", padx=10)
 
 
 #--------------------------------Book Gen Frame---------------------------------------------------------------------------------------------
@@ -1355,6 +1364,28 @@ word_analysis_back_button.pack(side="left", padx=30)
 # place button frame on word analysis frame
 word_analysis_button_frame.pack(side="bottom", pady=10)
 
+#--------------------------------Wiki Link Frame-----------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------------------------------------------------------
+wiki_link_frame = tk.Frame(root, width=1000, height=600)
+wiki_link_frame.pack_propagate(False)
+wiki_link_frame.grid(row=0, column=0, sticky='news')
+
+#--------------------------------Wiki Link Buttons--------------------------------------------------------------------------------------
+# button frame
+wiki_link_gen_button_frame = tk.Frame(wiki_link_frame)
+# generate button
+wiki_link_gen_button = tk.Button(wiki_link_gen_button_frame, text="Generate", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startGenerateBookThread)
+# help button
+wiki_link_help_button = tk.Button(wiki_link_gen_button_frame, text="Help", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=launchHelpSite)
+# upload button
+wiki_link_back_button = tk.Button(wiki_link_gen_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+# pack buttons into button frame
+wiki_link_gen_button.pack(side="left", padx=35)
+wiki_link_help_button.pack(side="left")
+wiki_link_back_button.pack(side="left", padx=30)
+
+# place button frame on word analysis frame
+wiki_link_gen_button_frame.pack(side="bottom", pady=10)
 
 # raise main_frame to start
 main_frame.tkraise()
