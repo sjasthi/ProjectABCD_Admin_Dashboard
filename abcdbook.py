@@ -965,6 +965,83 @@ def wordAnalysis():
         print(f'Error: {e}')
     finally:
         word_analysis_button.config(state='normal')
+'''
+Generate Wiki Link
+'''
+def generateWikiLink():
+    # TO DO
+    # gather all dress data from api
+    dress_data = apiRunner()
+    row_size_flag = 0
+    wiki_link_data = [] # data in spreadsheet that is different from API
+    # create window to display table
+    table_window = tk.Toplevel(root)
+    table_window.title("Wiki Page Link")
+    table_window.geometry(f"1000x600")
+    table_window.minsize(1000,600)
+
+    # create frame to hold table
+    table_frame = tk.Frame(table_window)
+    table_frame.pack_propagate(False)
+    table_frame.place(x=0, y=0, relwidth=1, relheight=.89, anchor="nw")
+
+    # using style to set row height and heading colors
+    style = ttk.Style()
+    style.theme_use('clam')
+    if row_size_flag <= 500:
+        style.configure('Treeview', rowheight=75)
+    elif row_size_flag > 500 and row_size_flag < 1000:
+        style.configure('Treeview', rowheight=100)
+    elif row_size_flag >= 1000:
+        style.configure('Treeview', rowheight=150)
+    elif row_size_flag >= 2500:
+        style.configure('Treeview', rowheight=200)
+    style.configure('Treeview.Heading', background='#848484', foreground='white')
+
+    # vertical scrollbar
+    table_scrolly = tk.Scrollbar(table_frame)
+    table_scrolly.pack(side="right", fill='y')
+    # horizontal scrollbar
+    table_scrollx = tk.Scrollbar(table_frame, orient='horizontal')
+    table_scrollx.pack(side="bottom", fill='x')
+
+    # use ttk Treeview to create table
+    table = ttk.Treeview(table_frame, yscrollcommand=table_scrolly.set, xscrollcommand=table_scrollx.set, columns=('id', 'name', 'wiki_page_link'), show='headings')
+
+    # configure the scroll bars with the table
+    table_scrolly.config(command=table.yview)
+    table_scrollx.config(command=table.xview)
+
+    # create the headers
+    table.heading('id', text='id', command=lambda: rowOrder('id', wiki_link_data, table))
+    table.heading('name', text='name', command=lambda: rowOrder('name', wiki_link_data, table))
+    table.heading('wiki_page_link', text='wiki_page_link', command=lambda: rowOrder('wiki_page_link', wiki_link_data, table))
+
+
+    # set column variables
+    table.column('id', width=75, stretch=False)
+    table.column('name', width=145, stretch=False)
+    table.column('wiki_page_link', width=1000, anchor='nw', stretch=False)
+        
+    # pack table into table_frame
+    table.pack(fill='both', expand=True)
+    # alternate colors each line
+    table.tag_configure('evenrow', background='#e8f3ff')
+    table.tag_configure('oddrow', background='#f7f7f7')
+
+    # monitor select event on items
+    # table.bind('<<TreeviewSelect>>', item_select)
+
+    # create button frame and place one table_window
+    btn_frame = tk.Frame(table_window)
+    btn_frame.pack(side='bottom', pady=15)
+    # create buttons and pack on button_frame
+    btn = tk.Button(btn_frame, text='Generate SQL File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff")
+    btn.pack(side='left', padx=25)
+
+    excel_columns = ['id', 'name', 'wiki_page_link'] # column headers for exporting Excel
+    btn2 = tk.Button(btn_frame, text='Generate Excel File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportExcel(wiki_link_data, excel_columns, 'wiki_page_link'))
+    btn2.pack(side='left', padx=25)
 
 '''
 Spins up new thread to run generateUpdate function
@@ -990,6 +1067,10 @@ def startWordAnalysisThread():
     word_analysis_thread = threading.Thread(target=wordAnalysis)
     word_analysis_thread.start()
 
+def startGenerateWikiLinkThread():
+    wiki_link_gen_button.config(state='disabled')
+    wiki_link_thread = threading.Thread(target=generateWikiLink)
+    wiki_link_thread.start()
 '''
 Launch help site when user clicks Help button
 '''
@@ -1369,16 +1450,15 @@ word_analysis_button_frame.pack(side="bottom", pady=10)
 wiki_link_frame = tk.Frame(root, width=1000, height=600)
 wiki_link_frame.pack_propagate(False)
 wiki_link_frame.grid(row=0, column=0, sticky='news')
-
+ 
 #--------------------------------Wiki Link Buttons--------------------------------------------------------------------------------------
 # button frame
 wiki_link_gen_button_frame = tk.Frame(wiki_link_frame)
-# generate button
-wiki_link_gen_button = tk.Button(wiki_link_gen_button_frame, text="Generate", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startGenerateBookThread)
-# help button
+
+wiki_link_gen_button = tk.Button(wiki_link_gen_button_frame, text="Generate", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startGenerateWikiLinkThread)
 wiki_link_help_button = tk.Button(wiki_link_gen_button_frame, text="Help", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=launchHelpSite)
-# upload button
 wiki_link_back_button = tk.Button(wiki_link_gen_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+
 # pack buttons into button frame
 wiki_link_gen_button.pack(side="left", padx=35)
 wiki_link_help_button.pack(side="left")
