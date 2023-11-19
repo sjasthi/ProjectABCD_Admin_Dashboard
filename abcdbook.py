@@ -12,6 +12,7 @@ from pandas import Series, DataFrame
 import textwrap
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from textblob import TextBlob
+import wikipediaapi
 
 # pip install googletrans
 # pip install googletrans==4.0.0-rc1
@@ -691,7 +692,6 @@ def rowOrder(order, diff_dress_data, table):
     #             table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
     #         else:
     #             table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))    
-
 '''
 Exports table data to Excel file
 '''
@@ -700,8 +700,31 @@ def exportExcel(data, excel_columns, sheet_name):
     df.to_excel(f'{sheet_name}.xlsx', index=False)
 
 '''
-Performs difference report on Excel sheet compared to API data
+Exports table data to SQL file
 '''
+def exportSQL(data, sql_columns, table_name):
+    with open(f'{table_name}.sql', 'w') as sql_file:
+        # Create SQL CREATE TABLE statement
+        create_table_query = f'CREATE TABLE IF NOT EXISTS {table_name} (\n'
+        create_table_query += ', '.join(f'{column} TEXT' for column in sql_columns)
+        create_table_query += '\n);\n\n'
+        sql_file.write(create_table_query)
+
+        # Create SQL INSERT INTO statement
+        sql_file.write(f'INSERT INTO {table_name} ({", ".join(sql_columns)}) VALUES\n')
+
+        # Iterate through data and write values
+        for row in data:
+            values = ', '.join(f"'{str(value)}'" for value in row)
+            sql_file.write(f'({values}),\n')
+
+        # Remove the trailing comma from the last line
+        sql_file.seek(sql_file.tell() - 2)
+        sql_file.truncate()
+
+        # Add a semicolon to the end of the SQL script
+        sql_file.write(';')
+        
 def diffReport():
     # helper for table item selection
     def item_select(_):
@@ -969,11 +992,23 @@ def wordAnalysis():
 Generate Wiki Link
 '''
 def generateWikiLink():
-    # TO DO
+    # set user agent
+    USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+    wiki_wiki = wikipediaapi.Wikipedia("en",headers={"User-Agent": USER_AGENT})
+
     # gather all dress data from api
-    dress_data = apiRunner()
+    wiki_link_data = apiRunner()
+    wiki_data = []
+    for item in wiki_link_data:
+        try:
+            page = wiki_wiki.page(item["name"])
+            if page.exists():
+                item["wiki_page_link"] = page.fullurl
+                wiki_data.append([item['id'], item['name'],item['wiki_page_link']])
+        except Exception as e:
+            print(f"Error retrieving Wikipedia data for {item['name']}: {e}")
     row_size_flag = 0
-    wiki_link_data = [] # data in spreadsheet that is different from API
+
     # create window to display table
     table_window = tk.Toplevel(root)
     table_window.title("Wiki Page Link")
@@ -997,10 +1032,11 @@ def generateWikiLink():
     elif row_size_flag >= 2500:
         style.configure('Treeview', rowheight=200)
     style.configure('Treeview.Heading', background='#848484', foreground='white')
-
+    
     # vertical scrollbar
     table_scrolly = tk.Scrollbar(table_frame)
     table_scrolly.pack(side="right", fill='y')
+    
     # horizontal scrollbar
     table_scrollx = tk.Scrollbar(table_frame, orient='horizontal')
     table_scrollx.pack(side="bottom", fill='x')
@@ -1011,36 +1047,55 @@ def generateWikiLink():
     # configure the scroll bars with the table
     table_scrolly.config(command=table.yview)
     table_scrollx.config(command=table.xview)
-
+    
     # create the headers
-    table.heading('id', text='id', command=lambda: rowOrder('id', wiki_link_data, table))
-    table.heading('name', text='name', command=lambda: rowOrder('name', wiki_link_data, table))
-    table.heading('wiki_page_link', text='wiki_page_link', command=lambda: rowOrder('wiki_page_link', wiki_link_data, table))
-
-
+    table.heading('id', text='id')
+    table.heading('name', text='name')
+    table.heading('wiki_page_link', text='wiki_page_link')
+    
     # set column variables
     table.column('id', width=75, stretch=False)
     table.column('name', width=145, stretch=False)
-    table.column('wiki_page_link', width=1000, anchor='nw', stretch=False)
+    table.column('wiki_page_link', width=850, anchor='nw', stretch=False)
         
     # pack table into table_frame
     table.pack(fill='both', expand=True)
+
+    # fill table with difference report data
+    for index, data in enumerate(wiki_data):
+    
+        # word wrap text
+        values_copy = list(data)  # Create a copy of the list
+
+        for i, cell in enumerate(values_copy):
+            values_copy[i] = wrap(str(cell), 250)
+
+        # if even row, set tag to evenrow
+        if index % 2 == 0:
+            table.insert(parent='', index=tk.END, values=tuple(values_copy), tags=('evenrow',))
+    
+        # if odd row, set tag to oddrow
+        else:
+            table.insert(parent='', index=tk.END, values=tuple(values_copy), tags=('oddrow',))
+
     # alternate colors each line
     table.tag_configure('evenrow', background='#e8f3ff')
     table.tag_configure('oddrow', background='#f7f7f7')
 
     # monitor select event on items
-    # table.bind('<<TreeviewSelect>>', item_select)
-
+    table.bind('<<TreeviewSelect>>')
+    
     # create button frame and place one table_window
     btn_frame = tk.Frame(table_window)
     btn_frame.pack(side='bottom', pady=15)
+    
     # create buttons and pack on button_frame
-    btn = tk.Button(btn_frame, text='Generate SQL File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff")
+    btn = tk.Button(btn_frame, text='Generate SQL File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff",command=lambda: exportSQL(wiki_data,excel_columns,'WIKI_LINK'))
     btn.pack(side='left', padx=25)
-
-    excel_columns = ['id', 'name', 'wiki_page_link'] # column headers for exporting Excel
-    btn2 = tk.Button(btn_frame, text='Generate Excel File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportExcel(wiki_link_data, excel_columns, 'wiki_page_link'))
+    
+    # column headers for exporting Excel
+    excel_columns = ['id', 'name', 'wiki_page_link'] 
+    btn2 = tk.Button(btn_frame, text='Generate Excel File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportExcel(wiki_data, excel_columns, 'WIKI_LINK'))
     btn2.pack(side='left', padx=25)
 
 '''
@@ -1058,7 +1113,6 @@ def startDiffReportThread():
     diff_report_button.config(state='disabled')
     diff_report_thread = threading.Thread(target=diffReport)
     diff_report_thread.start()
-
 '''
 Spins up new thread to run wordAnalysis function
 '''
@@ -1066,7 +1120,6 @@ def startWordAnalysisThread():
     word_analysis_button.config(state='disabled')
     word_analysis_thread = threading.Thread(target=wordAnalysis)
     word_analysis_thread.start()
-
 def startGenerateWikiLinkThread():
     wiki_link_gen_button.config(state='disabled')
     wiki_link_thread = threading.Thread(target=generateWikiLink)
@@ -1110,7 +1163,6 @@ def raiseFrame(frame):
         text_field.tkraise()
         root.title("Project ABCD Wiki Link")
 
-
 #--------------------------------Main Frame-----------------------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------------------------------------------------------------
 # configure grid to fill extra space and center
@@ -1137,15 +1189,15 @@ button_height = 3
 button_bgd_color = "#007FFF"
 button_font_color = "#ffffff"
 
-## Generate Book: Gets selected dress from API and import into ppt
+# Generate Book: Gets selected dress from API and import into ppt
 generate_book_button = tk.Button(main_button_frame, text="Generate Book", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('book_gen_frame'))
 generate_book_button.pack(side="left", padx=10)
 
-## Diff Report: Create a SQL file of dresses that got changed from excel sheet byt comparing to API
+# Diff Report: Create a SQL file of dresses that got changed from excel sheet byt comparing to API
 diff_report_button = tk.Button(main_button_frame, text="Difference Report", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('diff_report_frame'))
 diff_report_button.pack(side="left", padx=10, anchor='center')
 
-## Generate Book: Get selected dress that user input & put into a table (ID, Name, Description Count, DYK Count, Total Nouns Count, Total Adjectives Count)
+# Generate Book: Get selected dress that user input & put into a table (ID, Name, Description Count, DYK Count, Total Nouns Count, Total Adjectives Count)
 word_analysis_report_button = tk.Button(main_button_frame, text="Word Analysis Report", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('word_analysis_frame'))
 word_analysis_report_button.pack(side="left", padx=10)
 
@@ -1194,13 +1246,16 @@ layout_radio2 = tk.Radiobutton(layout_frame, text="Picture on Right - Text on Le
                                 font=MAIN_FONT, variable=layout, value=2)
 layout_radio3 = tk.Radiobutton(layout_frame, text="Picture on Left - Text on Right - Single Page - Landscape Mode",
                                 font=MAIN_FONT, variable=layout, value=3)
+
 # pack radio buttons into layout frame
 layout_radio4.pack(anchor="nw")
 layout_radio1.pack(anchor="nw")
 layout_radio2.pack(anchor="nw")
 layout_radio3.pack(anchor="nw")
+
 # place layout frame on main frame
 layout_frame.place(x=175, y=150, width=800)
+
 # layout radio buttons label
 layout_label = tk.Label(book_gen_frame, text="Layout:", font=LABEL_FONT)
 layout_label.place(x=25, y=170)
@@ -1216,14 +1271,17 @@ sort_order.set(1)
 
 # sort frame
 sort_frame = tk.Frame(book_gen_frame)
+
 # sort radio buttons
 sort_radio1 = tk.Radiobutton(sort_frame, text="By Name", font=MAIN_FONT, variable=sort_order, value=1)
 sort_radio2 = tk.Radiobutton(sort_frame, text="By ID", font=MAIN_FONT, variable=sort_order, value=2)
 sort_radio3 = tk.Radiobutton(sort_frame, text="By Input Order", font=MAIN_FONT, variable=sort_order, value=3)
+
 # pack radio buttons into sort frame
 sort_radio1.pack(side="left")
 sort_radio2.pack(side="left")
 sort_radio3.pack(side="left")
+
 # place sort frame on main frame
 sort_frame.place(x=175, y=265, width=800)
 
@@ -1259,6 +1317,7 @@ pic_height_var.set(preferences["PIC_HEIGHT"])
 
 # preferences frame
 preferences_frame = tk.Frame(book_gen_frame)
+
 # preferences labels and entry fields
 text_size_label = tk.Label(preferences_frame, text="Text Size:", font=MAIN_FONT)
 text_size = tk.Entry(preferences_frame, width=3, textvariable=text_size_var, state="disabled", font=MAIN_FONT)
@@ -1330,14 +1389,16 @@ numbering.set(1)
 
 # numbering frame
 numbering_frame = tk.Frame(book_gen_frame)
-# numbering radio buttons
+ # numbering radio buttons
 numbering_radio1 = tk.Radiobutton(numbering_frame, text="Show both Page Number and Dress ID", font=MAIN_FONT, variable=numbering, value=1)
 numbering_radio2 = tk.Radiobutton(numbering_frame, text="Show Page Number", font=MAIN_FONT, variable=numbering, value=2)
 numbering_radio3 = tk.Radiobutton(numbering_frame, text="Show Dress ID", font=MAIN_FONT, variable=numbering, value=3)
+
 # pack numbering buttons into sort frame
 numbering_radio1.pack(side="left")
 numbering_radio2.pack(side="left")
 numbering_radio3.pack(side="left")
+
 # place numbering frame on main frame
 numbering_frame.place(x=175, y=445, width=800)
 
