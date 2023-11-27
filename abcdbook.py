@@ -1,4 +1,4 @@
-import sys, io, requests, threading, webbrowser, urllib, os, platform, openpyxl, string
+import sys, io, requests, threading, webbrowser, urllib, os, platform, openpyxl, string, re, time
 import tkinter as tk
 from tkinter import ttk, messagebox
 from pptx import Presentation
@@ -12,6 +12,7 @@ from pandas import Series, DataFrame
 import textwrap
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from textblob import TextBlob
+from bs4 import BeautifulSoup
 
 # pip install googletrans
 # pip install googletrans==4.0.0-rc1
@@ -90,7 +91,6 @@ def apiRunner():
     # get dress numbers from text field
     get_text_field = text_field.get("1.0", "end-1c").split(',')
     
-
     # add to list
     for number in get_text_field:
         if (number.strip().isnumeric()):
@@ -155,14 +155,17 @@ def apiRunner():
 '''
 Downloads dress images
 '''
-def downloadImages(url, img_name):
-    # downloads dress image
-    img_url = url
-    img_path = f'./images/{img_name}'
-    opener = urllib.request.build_opener()
-    opener.addheaders=[('User-Agent', 'XY')]
-    urllib.request.install_opener(opener)
-    urllib.request.urlretrieve(img_url, img_path)
+def downloadImages(folder_name, url, img_name):
+    try:
+        # downloads dress image
+        img_url = url
+        img_path = f'./{folder_name}/{img_name}'
+        opener = urllib.request.build_opener()
+        opener.addheaders=[('User-Agent', 'XY')]
+        urllib.request.install_opener(opener)
+        urllib.request.urlretrieve(img_url, img_path)
+    except Exception as e:
+        print(f'Error downloading images: {e}')
 
 '''
 Sets up and starts threads for downloading dress images
@@ -209,7 +212,7 @@ def imageRunner(dress_data):
     # spins up 10 threads at a time and calls downloadImages with url and image name
     with ThreadPoolExecutor(max_workers=10) as exec:
         for index, url in enumerate(url_list):
-            threads.append(exec.submit(downloadImages, url, img_name_list[index]))
+            threads.append(exec.submit(downloadImages, "images", url, img_name_list[index]))
 
         complete = 0 # number of threads that have finished
         for task in as_completed(threads):
@@ -233,27 +236,30 @@ def translateText(text):
             dest_language = 'es'
     else:
         return text # return text if english
-
-    # Create the translator
-    translator = googletrans.Translator()
-    translated_text = translator.translate(text, dest = dest_language)
-    return translated_text.text
+    try:
+        # Create the translator
+        translator = googletrans.Translator()
+        translated_text = translator.translate(text, dest = dest_language)
+        return translated_text.text
+    except Exception as e:
+        print("Error:", e)
+        return ""
 
 '''
 Sorts dress data based on user selection
 '''
 def sortDresses(dress_data):
     if sort_order.get() == 1:
-        return sorted(dress_data, key=lambda x : x['name'])
+        return sorted(dress_data, key=lambda x : str(x['name']).lower())
     elif sort_order.get() == 2:
         return sorted(dress_data, key=lambda x : x['id'])
     elif sort_order.get() == 3:
         return dress_data
 
 '''
-Opens pptx depending on OS
+Opens file depending on OS
 '''
-def openPPT(file_name):
+def openFile(file_name):
     current_os = platform.system()
     try:
         if current_os == "Windows":
@@ -398,11 +404,11 @@ def add_image(slide, dress_info, left, top):
         image_height_inch = 4.94
 
     try:
-        picture = slide.shapes.add_picture(f'./images/{dress_info["image_url"]}', Inches(left), Inches(top), Inches(image_width_inch), Inches(image_height_inch))
+        picture = slide.shapes.add_picture(f'./images/Slide{dress_info["id"]}.png', 0, Inches(0.83), Inches(image_width_inch), Inches(image_height_inch))
     except FileNotFoundError:
         # tk.messagebox.showerror(title="Error", message="When the Download Images check box is not checked make sure you have an images \
         #                                                 directory in the root of this project that includes the correct images. (example: 1 == Slide1.PNG)")
-        print(f'Image {dress_info["image_url"]} Not Found!')
+        print(f'Image Slide{dress_info["id"]}.png Not Found!')
 
 '''
 Create the Dress Id & Page Number text
@@ -465,13 +471,92 @@ def add_numbering(slide, dress_info, index, left, top, width, height, left2, top
             number_box.text = translateText(f'Dress ID: {dress_info["id"]}')
 
 '''
+Closes the pop alert message
+'''
+def close_popup(popup):
+    popup.destroy()
+
+'''
+Updates the timer for the alert popup
+'''
+def update_timer(popup, timer_label, seconds_left):
+    timer_label.config(text=f"Auto closes in {seconds_left} sec.")
+
+    if seconds_left > 0:
+        # Update the timer every second
+        root.after(1000, update_timer, popup, timer_label, seconds_left - 1)
+    else:
+        close_popup(popup)
+
+'''
+Displays the alert message
+'''
+def show_error_popup(text_message, duration_num):
+    popup = tk.Toplevel(root)
+    popup.title("Alert Message")
+    
+    label = tk.Label(popup, text=text_message)
+    label.pack(padx=10, pady=10)
+
+    timer_label = tk.Label(popup, text="")
+    timer_label.pack(pady=5)
+
+    duration = duration_num
+    update_timer(popup, timer_label, duration)
+
+'''
 Performs update once generate button clicked
 '''
 def generateBook():
-    # gather all dress data from api
-    dress_data = apiRunner()
+    # check if Generate from Local is active
+    if gen_local.get() == 1:
+        # get update for dress number input
+        update_dress_list = []
+        # get dress numbers from text field
+        get_text_field = text_field.get("1.0", "end-1c").split(',')
+        
+        # add to list
+        for number in get_text_field:
+            if (number.strip().isnumeric()):
+                update_dress_list.append(int(number.strip()))
+        
+        # remove duplicates
+        dress_ids = []
+        [dress_ids.append(x) for x in update_dress_list if x not in dress_ids]
+
+        # path to local Excel data
+        file_path = "APIData.xlsx"
+
+        # gets and cleans dress data from Excel file
+        sheet_dress_data = pd.read_excel(file_path)
+        sheet_dress_data.dropna(subset=['id'], inplace=True) # drops any rows with na ID
+        sheet_dress_data['description'].fillna('', inplace=True) # removes na/nan from description column
+        sheet_dress_data['did_you_know'].fillna('', inplace=True) # removes na/nan from did_you_know column
+        sheet_dress_data['description'] = sheet_dress_data['description'].astype(str).apply(openpyxl.utils.escape.unescape) # convert escaped strings to ASCII
+        sheet_dress_data['did_you_know'] = sheet_dress_data['did_you_know'].astype(str).apply(openpyxl.utils.escape.unescape) # Convert escaped strings to ASCII
+        
+        # holds dress data from local Excel sheet
+        dress_data = [] 
+        # cycle through dress_ids and append data from excel sheet to dress_data
+        for id in dress_ids:
+            row = sheet_dress_data.loc[id-1]
+            dress_data.append({'id':row.loc['id'], 'name':row.loc['name'], 'description':row.loc['description'], 'did_you_know':row.loc['did_you_know']})   
+    else:
+        dress_data = apiRunner() # gather all dress data from api
+    
     # sort dress data
     sorted_dress_data = sortDresses(dress_data)
+
+    # if there is no image in the local folder then download from web
+    if download_imgs.get() == 0:
+        if not os.path.exists('./images'):
+            os.makedirs('./images')
+        if not os.listdir('./images'):
+            text_message = "Local folder is empty. Attempting to grab image(s) from web."
+            duration_num = 4
+            show_error_popup(text_message, duration_num)
+            time.sleep(duration_num+1)
+            imageRunner(sorted_dress_data)
 
     # download images from web if download images check box is selected
     if download_imgs.get() == 1:
@@ -488,6 +573,34 @@ def generateBook():
     while os.path.exists(file_name): # check if file name exist,
         count += 1
         file_name = f"{os.path.splitext(ppt_file_name)[0]}({count}).pptx" # if file name exisit create new filename
+
+    # progress bar window for API data retrieval
+    progress_window = tk.Toplevel(root)
+    progress_window.title('Creating Book')
+    sw = int(progress_window.winfo_screenwidth()/2 - 450/2)
+    sh = int(progress_window.winfo_screenheight()/2 - 70/2)
+    progress_window.geometry(f'450x70+{sw}+{sh}')
+    progress_window.resizable(False, False)
+    progress_window.attributes('-disable', True)
+    progress_window.focus()
+
+    # progress bar custom style
+    pb_style = ttk.Style()
+    pb_style.theme_use('clam')
+    pb_style.configure('green.Horizontal.TProgressbar', foreground='#1ec000', background='#1ec000')
+
+    # frame to hold progress bar
+    pb_frame = tk.Frame(progress_window)
+    pb_frame.pack()
+
+    # progress bar
+    pb = ttk.Progressbar(pb_frame, length=400, style='green.Horizontal.TProgressbar', mode='determinate', maximum=100, value=0)
+    pb.pack(pady=10)
+
+    # label for percent complete
+    percent_label = tk.Label(pb_frame, text='Creating Book...0%')
+    percent_label.pack()
+    complete = 0
 
     # get dress info for items in list & translate
     for index, dress_info in enumerate(sorted_dress_data):
@@ -590,14 +703,19 @@ def generateBook():
             add_did_you_know_text(slide, dress_did_you_know, left, 8.19, 7.81, 1.11)
             add_numbering(slide, dress_info, index, numbering1_left, 11.08, 1.28, 0.34, numbering2_left, 11.08, 1.28, 0.34)
             add_image(slide, dress_info, image_left, image_top)
+        complete += 1
+        pb['value'] = (complete/len(sorted_dress_data))*100 # calculate percentage of images downloaded
+        percent_label.config(text=f'Creating Book...{int(pb["value"])}%') # update completion percent label
     try:
         prs.save(file_name)
     except Exception as e:
         print(f"-- DEBUG -- saving presentation: {e}")
     finally:
         book_gen_generate_button.config(state="normal")
+    
+    progress_window.destroy() # close progress bar window
 
-    openPPT(file_name)
+    openFile(file_name)
 
 '''
 Helper function to wrap text
@@ -609,58 +727,57 @@ def wrap(string, length=150):
 Order sort for treeview table
 '''
 def rowOrder(order, diff_dress_data, table):
-    pass
-    # if order == 'id':
-    #     table.delete(*table.get_children())
-    #     for index, data in enumerate(sorted(diff_dress_data, key=lambda x : x[0])):
-    #     # word wrap text
-    #         for i, cell in enumerate(data): 
-    #             data[i] = wrap(str(cell), 250)
-    #         # if even row, set tag to evenrow
-    #         # if odd row, set tag to oddrow
-    #         if index % 2 == 0:
-    #             table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
-    #         else:
-    #             table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
-                
-    # elif order == 'name':
-    #     table.delete(*table.get_children())
-    #     for index, data in enumerate(sorted(diff_dress_data, key=lambda x : x[1])):
-    #     # word wrap text
-    #         for i, cell in enumerate(data): 
-    #             data[i] = wrap(str(cell), 250)
-    #         # if even row, set tag to evenrow
-    #         # if odd row, set tag to oddrow
-    #         if index % 2 == 0:
-    #             table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
-    #         else:
-    #             table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
+    if order == 'id':
+        table.delete(*table.get_children())
+        for index, data in enumerate(sorted(diff_dress_data, key=lambda x : x[0])):
+            # word wrap text
+            for i, cell in enumerate(data): 
+                data[i] = wrap(str(cell), 250)
+            # if even row, set tag to evenrow
+            # if odd row, set tag to oddrow
+            if index % 2 == 0:
+                table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
+            else:
+                table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
 
-    # elif order == 'description':
-    #     table.delete(*table.get_children())
-    #     for index, data in enumerate(sorted(diff_dress_data, key=lambda x : x[2])):
-    #     # word wrap text
-    #         for i, cell in enumerate(data): 
-    #             data[i] = wrap(str(cell), 250)
-    #         # if even row, set tag to evenrow
-    #         # if odd row, set tag to oddrow
-    #         if index % 2 == 0:
-    #             table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
-    #         else:
-    #             table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
+    elif order == 'name':
+        table.delete(*table.get_children())
+        for index, data in enumerate(sorted(diff_dress_data, key=lambda x : str(x[1]).lower())):
+            # word wrap text
+            for i, cell in enumerate(data): 
+                data[i] = wrap(str(cell), 250)
+            # if even row, set tag to evenrow
+            # if odd row, set tag to oddrow
+            if index % 2 == 0:
+                table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
+            else:
+                table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
 
-    # elif order == 'did_you_know':
-    #     table.delete(*table.get_children())
-    #     for index, data in enumerate(sorted(diff_dress_data, key=lambda x : x[1])):
-    #     # word wrap text
-    #         for i, cell in enumerate(data): 
-    #             data[i] = wrap(str(cell), 250)
-    #         # if even row, set tag to evenrow
-    #         # if odd row, set tag to oddrow
-    #         if index % 2 == 0:
-    #             table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
-    #         else:
-    #             table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))    
+    elif order == 'description':
+        table.delete(*table.get_children())
+        for index, data in enumerate(sorted(diff_dress_data, key=lambda x : str(x[2]).lower())):
+            # word wrap text
+            for i, cell in enumerate(data): 
+                data[i] = wrap(str(cell), 250)
+            # if even row, set tag to evenrow
+            # if odd row, set tag to oddrow
+            if index % 2 == 0:
+                table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
+            else:
+                table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
+
+    elif order == 'did_you_know':
+        table.delete(*table.get_children())
+        for index, data in enumerate(sorted(diff_dress_data, key=lambda x : str(x[3]).lower())):
+            # word wrap text
+            for i, cell in enumerate(data): 
+                data[i] = wrap(str(cell), 250)
+            # if even row, set tag to evenrow
+            # if odd row, set tag to oddrow
+            if index % 2 == 0:
+                table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
+            else:
+                table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))    
 
 '''
 Exports table data to Excel file
@@ -670,13 +787,40 @@ def exportExcel(data, excel_columns, sheet_name):
     df.to_excel(f'{sheet_name}.xlsx', index=False)
 
 '''
+Exports difference report data to SQL update script
+'''
+def exportSQL(diff_dress_data):
+    sql_queries = [] # stores sql query
+
+    # cycle through the diff_dress_data and create queries for each
+    for data in diff_dress_data:
+        data[1] = str(data[1]).replace('"', '\\"') # replace " with \" so quotations don't mess up query
+        data[2] = str(data[2]).replace('"', '\\"') # replace " with \" so quotations don't mess up query
+        data[3] = str(data[3]).replace('"', '\\"') # replace " with \" so quotations don't mess up query
+        sql_queries.append(f'UPDATE dresses\nSET name="{data[1]}", description="{data[2]}", did_you_know="{data[3]}"\nWHERE id={data[0]};\n')
+    
+    # create path for sql script
+    update_script_path = 'abcdbook_SQL_update.sql'
+    update_script_name = 'abcdbook_SQL_update'
+    count = 1
+    while os.path.exists(update_script_path):
+        update_script_path = f'{update_script_name}({count}).sql'
+        count += 1
+
+    # write sql queries into .sql script
+    with open(update_script_path, 'w') as f:
+        for query in sql_queries:
+            f.write(f'{query}\n')
+
+'''
 Performs difference report on Excel sheet compared to API data
 '''
 def diffReport():
     # helper for table item selection
     def item_select(_):
-        for item in table.selection():
-            print(table.item(item)['values'])
+        if len(table.selection()) > 0:
+            for item in table.selection():
+                print(table.item(item)['values'])
 
     file_path = 'APIData.xlsx' # Change to path where file is located
 
@@ -700,12 +844,15 @@ def diffReport():
             # check if name, description, or did_you_know is different from the API data
             if row.loc['name'] != api_data['name']:
                 diff_dress_data.append([item for item in row])
+                # diff_dress_data[index][1] = f'-- DIFFERENT! -- {diff_dress_data[index][1]}'
                 continue
             if row.loc['description'] != api_data['description']:
                 diff_dress_data.append([item for item in row])
+                # diff_dress_data[index][2] = f'-- DIFFERENT! -- {diff_dress_data[index][2]}'
                 continue
             if row.loc['did_you_know'] != api_data['did_you_know']:
                 diff_dress_data.append([item for item in row])
+                # diff_dress_data[index][3] = f'-- DIFFERENT! -- {diff_dress_data[index][3]}'
                 continue
 
         # find largest description field
@@ -734,7 +881,7 @@ def diffReport():
             style.configure('Treeview', rowheight=100)
         elif row_size_flag >= 1000:
             style.configure('Treeview', rowheight=150)
-        elif row_size_flag >= 2500:
+        elif row_size_flag >= 2000:
             style.configure('Treeview', rowheight=200)
         style.configure('Treeview.Heading', background='#848484', foreground='white')
 
@@ -771,7 +918,10 @@ def diffReport():
         for index, data in enumerate(diff_dress_data):
             # word wrap text
             for i, cell in enumerate(data): 
-                data[i] = wrap(str(cell), 250)
+                if len(str(data[i])) > 2500:
+                    data[i] = wrap(str(cell), 400)
+                else:
+                    data[i] = wrap(str(cell), 250)
 
             # if even row, set tag to evenrow
             # if odd row, set tag to oddrow
@@ -791,15 +941,12 @@ def diffReport():
         btn_frame = tk.Frame(table_window)
         btn_frame.pack(side='bottom', pady=15)
         # create buttons and pack on button_frame
-        btn = tk.Button(btn_frame, text='Export SQL File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff")
+        btn = tk.Button(btn_frame, text='Export SQL File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportSQL(diff_dress_data))
         btn.pack(side='left', padx=25)
 
         excel_columns = ['id', 'name', 'description', 'did_you_know'] # column headers for exporting Excel
         btn2 = tk.Button(btn_frame, text='Export Excel File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportExcel(diff_dress_data, excel_columns, 'difference_report'))
         btn2.pack(side='left', padx=25)
-
-        # print ("Changes were made to the following dresses:")
-        # print(diff_dress_data)
 
     except FileNotFoundError:
         tk.messagebox.showerror(title="Error in diffReport", message=f"File '{file_path}' not found.")
@@ -809,6 +956,155 @@ def diffReport():
         print(f'Error: {e}')
     finally:
         diff_report_button.config(state="normal")
+
+'''
+Returns 3 google images url and put into excel sheet
+'''
+def googleImage():
+    api_dress_data = sorted(apiRunner(), key=lambda x : x['id'])
+
+    excel_file_name = "googleimages.xlsx"
+    file_name = "googleimages.xlsx"
+    count = 0
+
+    # Rename file if the file name exists
+    while os.path.exists(file_name):
+        count += 1
+        file_name = f"{os.path.splitext(excel_file_name)[0]}({count}).xlsx" # if file name exisit create new filename
+
+    # Open the Excel file
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active # active sheet (first sheet)
+
+    # Create header for first row
+    header_row = ["ID", "Name", "URL1", "URL2", "URL3"]
+    sheet.append(header_row)
+
+    # progress bar window for creating excel file
+    excel_progress_window = tk.Toplevel(root)
+    excel_progress_window.title('Creating Excel File')
+    sw = int(excel_progress_window.winfo_screenwidth()/2 - 450/2)
+    sh = int(excel_progress_window.winfo_screenheight()/2 - 70/2)
+    excel_progress_window.geometry(f'450x70+{sw}+{sh}')
+    excel_progress_window.resizable(False, False)
+    excel_progress_window.attributes('-disable', True)
+    excel_progress_window.focus()
+
+    # progress bar custom style
+    pb_style = ttk.Style()
+    pb_style.theme_use('clam')
+    pb_style.configure('green.Horizontal.TProgressbar', foreground='#1ec000', background='#1ec000')
+
+    # frame to hold progress bar
+    pb_frame = tk.Frame(excel_progress_window)
+    pb_frame.pack()
+
+    # progress bar
+    pb = ttk.Progressbar(pb_frame, length=400, style='green.Horizontal.TProgressbar', mode='determinate', maximum=100, value=0)
+    pb.pack(pady=10)
+
+    # label for percent complete
+    percent_label = tk.Label(pb_frame, text='Creating Excel File...0%')
+    percent_label.pack()
+    complete = 0
+
+    url_list = []
+    img_name_list = []
+
+    # Loop through items in list 
+    row_count = 2
+    for item in api_dress_data:
+        # Use google to search for image of each dress and return 3 image url
+        word = f"{item['name']} india"
+        url = 'https://www.google.com/search?q={0}&tbm=isch'.format(word)
+        content = requests.get(url).content
+        soup = BeautifulSoup(content, 'html.parser')
+        images = soup.findAll('img')
+
+        # Adds the dress number and name
+        sheet.cell(row=row_count, column=1, value=item['id'])
+        sheet.cell(row=row_count, column=2, value=item['name'])
+
+        # Adds the 3 image urls to the excel sheet
+        for j, image in enumerate(images[1:4]):
+            img_src = image.get('src')
+            try:
+                response = requests.get(img_src, stream=True) # Sends a HTTP GET request to the url
+                if response.status_code == 200:
+                    content_type = response.headers['Content-Type'] # Gets the content type (ex: image/png)
+                    img_extension = content_type.split('/')[-1].lower() # Gets the content after the "/" and put into lowercase
+
+                    valid_extensions = {'jpg', 'jpeg', 'gif', 'png'} 
+                    if img_extension in valid_extensions: # if url is a valid extension add to sheet
+                        sheet.cell(row=row_count, column=j + 3, value=f"{img_src}.{img_extension}")
+
+                        # if user chooses to download google images
+                        if download_google_imgs.get() == 1: 
+                            image_num = j+1
+                            # creates directory to save images if one does not exist
+                            if not os.path.exists('./google_images'):
+                                os.makedirs('./google_images')
+
+                            dress_name = item["name"].replace(" ", "_") # changes all space in dress name to "_"
+                            new_dress_name = re.sub(r'[\\/:*?"<>|]', '', dress_name) # removes special characters
+                            new_dress_name = new_dress_name.replace('\n\n', '') # removes "\n\n"
+
+                            image_name = f'{item["id"]}_{new_dress_name}_{image_num}.{img_extension}' # sets the image file name
+                            img_name_list.append(image_name)
+                            url_list.append(image.get('src'))
+            except Exception as e:
+                print(f"Error: {e}")
+        row_count+=1
+        complete += 1
+        pb['value'] = (complete/len(api_dress_data))*100 # calculate percentage of data retrieved
+        percent_label.config(text=f'Creating Excel File...{int(pb["value"])}%') # update completion percent label
+    excel_progress_window.destroy() # close progress bar window
+    workbook.save(file_name)
+
+    # progress bar window for downloading google image
+    google_image_progress_window = tk.Toplevel(root)
+    google_image_progress_window.title('Downloading Images')
+    sw = int(google_image_progress_window.winfo_screenwidth()/2 - 450/2)
+    sh = int(google_image_progress_window.winfo_screenheight()/2 - 70/2)
+    google_image_progress_window.geometry(f'450x70+{sw}+{sh}')
+    google_image_progress_window.resizable(False, False)
+    google_image_progress_window.attributes('-disable', True)
+    google_image_progress_window.focus()
+
+    # progress bar custom style
+    pb_style = ttk.Style()
+    pb_style.theme_use('clam')
+    pb_style.configure('green.Horizontal.TProgressbar', foreground='#1ec000', background='#1ec000')
+
+    # frame to hold progress bar
+    pb_frame = tk.Frame(google_image_progress_window)
+    pb_frame.pack()
+
+    # progress bar
+    pb = ttk.Progressbar(pb_frame, length=400, style='green.Horizontal.TProgressbar', mode='determinate', maximum=100, value=0)
+    pb.pack(pady=10)
+
+    # label for percent complete
+    percent_label = tk.Label(pb_frame, text='Downloading Images...0%')
+    percent_label.pack()
+    
+    threads= [] # working threads
+
+    if download_google_imgs.get() == 1: 
+        # spins up 10 threads at a time and calls downloadImages with url and image name
+        with ThreadPoolExecutor(max_workers=10) as exec:
+            for index, url in enumerate(url_list):
+                threads.append(exec.submit(downloadImages, "google_images", url, img_name_list[index]))
+
+            complete = 0 # number of threads that have finished
+            for task in as_completed(threads):
+                complete += 1
+                pb['value'] = (complete/len(url_list))*100 # calculate percentage of images downloaded
+                percent_label.config(text=f'Downloading Images...{int(pb["value"])}%') # update completion percent label
+    
+        google_image_progress_window.destroy() # close progress bar window
+    openFile(file_name)
+    google_image_search_button.config(state='normal')
 
 '''
 Performs word analysis on given dress IDs
@@ -955,6 +1251,14 @@ def startWordAnalysisThread():
     word_analysis_thread.start()
 
 '''
+Spins up new thread to run googleImage function
+'''
+def startGoogleImageThread():
+    google_image_search_button.config(state='disabled')
+    google_image_search_thread = threading.Thread(target=googleImage)
+    google_image_search_thread.start()
+
+'''
 Launch help site when user clicks Help button
 '''
 def launchHelpSite():
@@ -987,6 +1291,11 @@ def raiseFrame(frame):
         text_field_label.tkraise()
         text_field.tkraise()
         root.title("Project ABCD Word Analysis")
+    elif frame == 'google_image_frame':
+        google_image_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
+        root.title("Project ABCD Google Image")
 
 
 #--------------------------------Main Frame-----------------------------------------------------------------------------------------------
@@ -1026,6 +1335,13 @@ diff_report_button.pack(side="left", padx=50, anchor='center')
 ## Generate Book: Get selected dress that user input & put into a table (ID, Name, Description Count, DYK Count, Total Nouns Count, Total Adjectives Count)
 word_analysis_report_button = tk.Button(main_button_frame, text="Word Analysis Report", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('word_analysis_frame'))
 word_analysis_report_button.pack(side="left", padx=50)
+
+main_button_frame2 = tk.Frame(main_frame)
+main_button_frame2.place(relx=.5, rely=.7, anchor='center')
+
+## Google Images: Create an Excel file with 3 image links to the selected dresses
+google_image_button = tk.Button(main_button_frame2, text="Google Image", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('google_image_frame'))
+google_image_button.pack(side="left", padx=50)
 
 
 #--------------------------------Book Gen Frame---------------------------------------------------------------------------------------------
@@ -1232,7 +1548,10 @@ language = tk.StringVar()
 language.set(LANGUAGES[0])
 # Download image variable
 download_imgs = tk.IntVar()
-download_imgs.set(1)
+download_imgs.set(0)
+# Generate book from local Excel sheet
+gen_local = tk.IntVar()
+gen_local.set(0)
 
 # translate frame
 check_button_frame = tk.Frame(book_gen_frame)
@@ -1241,12 +1560,15 @@ translate_checkbutton = tk.Checkbutton(check_button_frame, text="Translate to:",
 # language options
 language_options = tk.OptionMenu(check_button_frame, language, *LANGUAGES)
 # download images
-download_images = tk.Checkbutton(check_button_frame, text="Download Images", font=MAIN_FONT, variable=download_imgs, onvalue=1, offvalue=0)
+download_images = tk.Checkbutton(check_button_frame, text="Download Images", font=MAIN_FONT, variable=download_imgs, onvalue=1, offvalue=0, command=lambda: gen_local.set(0))
+# generate book from local Excel sheet
+generate_from_local = tk.Checkbutton(check_button_frame, text="Generate from Local", font=MAIN_FONT, variable=gen_local, onvalue=1, offvalue=0, command=lambda: download_imgs.set(0))
 
 # pack translate options into translate frame
 translate_checkbutton.pack(side="left")
 language_options.pack(side="left")
 download_images.pack(side="left")
+generate_from_local.pack(side="left")
 # place translate frame on main frame
 check_button_frame.place(x=175, y=495)
 
@@ -1318,6 +1640,40 @@ word_analysis_back_button.pack(side="left", padx=30)
 
 # place button frame on word analysis frame
 word_analysis_button_frame.pack(side="bottom", pady=10)
+
+#--------------------------------Google Image Frame-----------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------------------------------------------------------
+google_image_frame = tk.Frame(root, width=1000, height=600)
+google_image_frame.pack_propagate(False)
+google_image_frame.grid(row=0, column=0, sticky='news')
+
+#--------------------------------Google Image Buttons-----------------------------------------------------------------------------------------------
+# Download google image variable
+download_google_imgs = tk.IntVar()
+download_google_imgs.set(0)
+
+# button frame
+google_image_button_frame = tk.Frame(google_image_frame)
+# checkbox frame
+download_google_image_checkbutton = tk.Frame(google_image_frame)
+# download images checkbox
+download_google_images = tk.Checkbutton(download_google_image_checkbutton, text="Download Images", font=MAIN_FONT, variable=download_google_imgs, onvalue=1, offvalue=0, command=lambda: gen_local.set(0))
+# google search button
+google_image_search_button = tk.Button(google_image_button_frame, text="Google Search", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startGoogleImageThread)
+# back button
+google_image_back_button = tk.Button(google_image_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+
+# pack buttons into button frame
+download_google_image_checkbutton.pack(side="left")
+download_google_images.pack(side="left")
+google_image_search_button.pack(side="left", padx=35)
+google_image_back_button.pack(side="left", padx=30)
+# place google image frame on main frame
+google_image_button_frame.place(x=175, y=495)
+download_google_image_checkbutton.place(x=170, y=150)
+
+# place button frame on word analysis frame
+google_image_button_frame.pack(side="bottom", pady=10)
 
 
 # raise main_frame to start
