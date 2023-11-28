@@ -22,3 +22,6 @@ pip install pandas
 -- TextBlob --
 pip install -U textblob
 python -m textblob.download_corpora
+
+-- Textstat --
+pip install textstat
