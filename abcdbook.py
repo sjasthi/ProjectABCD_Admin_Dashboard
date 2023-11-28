@@ -90,6 +90,7 @@ def apiRunner():
     # get dress numbers from text field
     get_text_field = text_field.get("1.0", "end-1c").split(',')
     
+
     # add to list
     for number in get_text_field:
         if (number.strip().isnumeric()):
@@ -155,16 +156,13 @@ def apiRunner():
 Downloads dress images
 '''
 def downloadImages(url, img_name):
-    try:
-        # downloads dress image
-        img_url = url
-        img_path = f'./images/{img_name}'
-        opener = urllib.request.build_opener()
-        opener.addheaders=[('User-Agent', 'XY')]
-        urllib.request.install_opener(opener)
-        urllib.request.urlretrieve(img_url, img_path)
-    except Exception as e:
-        print(f'Error downloading images: {e}')
+    # downloads dress image
+    img_url = url
+    img_path = f'./images/{img_name}'
+    opener = urllib.request.build_opener()
+    opener.addheaders=[('User-Agent', 'XY')]
+    urllib.request.install_opener(opener)
+    urllib.request.urlretrieve(img_url, img_path)
 
 '''
 Sets up and starts threads for downloading dress images
@@ -246,266 +244,18 @@ Sorts dress data based on user selection
 '''
 def sortDresses(dress_data):
     if sort_order.get() == 1:
-        return sorted(dress_data, key=lambda x : str(x['name']).lower())
+        return sorted(dress_data, key=lambda x : x['name'])
     elif sort_order.get() == 2:
         return sorted(dress_data, key=lambda x : x['id'])
     elif sort_order.get() == 3:
         return dress_data
 
 '''
-Opens pptx depending on OS
-'''
-def openPPT(file_name):
-    current_os = platform.system()
-    try:
-        if current_os == "Windows":
-            print(f"-- DEBUG -- Windows {file_name}")
-            os.system(f"start {file_name}")
-        elif current_os == "Darwin":
-            print(f"-- DEBUG -- Darwin {file_name}")
-            os.system(f"open {file_name}")
-        elif current_os == "Linux":
-            print(f"-- DEBUG -- Linux {file_name}")
-            os.system(f"xdg-open {file_name}")
-        else:
-            print("Error: Cannot open file " + current_os + " not supported.")
-    except Exception as e:
-        print("Error:", e)
-
-'''
-Create the Dress Name Title textbox
-'''
-def add_title_box(slide, dress_name, left, top, width, height):
-    title = slide.shapes.title
-    title.left = Inches(left)
-    title.top = Inches(top)
-    title.width = Inches(width)
-    title.height = Inches(height)
-    title.text = f'{dress_name.upper()}'
-
-    title.text_frame.paragraphs[0].font.color.rgb = RGBColor(0x09, 0x09, 0x82)
-    title.text_frame.paragraphs[0].text = title.text_frame.paragraphs[0].text.upper()
-    title.text_frame.paragraphs[0].font.name = title_font_var.get()
-    title.text_frame.paragraphs[0].font.size = Pt(int(title_size_var.get()))
-    title.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
-
-'''
-Create the subtitle highlight
-'''
-def add_subtitle_highlight(slide, left, top, width, height):
-    # create the shape
-    rectangle1 = slide.shapes.add_shape(1, Inches(left), Inches(top), Inches(width), Inches(height))
-    rectangle1.rotation = 357
-
-    # color fill
-    fill1 = rectangle1.fill
-    fill1.solid()
-    fill1.fore_color.rgb = RGBColor(202, 246, 189)
-
-    # no outline
-    line1 = rectangle1.line
-    line1.color.rgb = RGBColor(255, 255, 255)
-
-    # no shaddow
-    shadow1 = rectangle1.shadow
-    shadow1.inherit = False
-
-'''
-Create the Description subtitle
-'''
-def add_description_subtitle(slide, left, top, width, height):
-    description_subtitle_box = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
-    description_subtitle_frame = description_subtitle_box.text_frame
-
-    description_subtitle = description_subtitle_frame.add_paragraph()
-    description_subtitle.font.color.rgb = RGBColor(0x6E, 0xD8, 0xFF)
-    description_subtitle.font.bold = True
-    description_subtitle.font.name = subtitle_font_var.get()
-    description_subtitle.text = translateText("DESCRIPTION:")
-
-    # make text smaller for layout 4
-    if layout.get() == 4:
-        description_subtitle.font.size = Pt(16)
-    else:
-        description_subtitle.font.size = Pt(int(subtitle_size_var.get()))
-
-'''
-Add the Description text
-'''
-def add_description_text(slide, dress_description, left, top, width, height):
-    # description - text (left, top, width, height)
-    description_text_box = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
-    description_text_frame = description_text_box.text_frame
-
-    description_text_frame.word_wrap = True
-    description_text = description_text_frame.add_paragraph()
-    description_text.font.name = text_font_var.get()
-    description_text.text = f'{translateText(dress_description)}'
-
-    # make text smaller for layout 4
-    if layout.get() == 4:
-        description_text.font.size = Pt(11)
-    else:
-        description_text.font.size = Pt(int(text_size_var.get()))
-
-'''
-Create Did You Know subtitle
-'''
-def add_did_you_know_subtitle(slide, left, top, width, height):
-    did_you_know_subtitle_box = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
-    did_you_know_subtitle_frame = did_you_know_subtitle_box.text_frame
-
-    did_you_know_subtitle = did_you_know_subtitle_frame.add_paragraph()
-    did_you_know_subtitle.font.color.rgb = RGBColor(0x6E, 0xD8, 0xFF)
-    did_you_know_subtitle.font.bold = True
-    did_you_know_subtitle.font.name = subtitle_font_var.get()
-    did_you_know_subtitle.text = translateText("DID YOU KNOW?")
-
-    # make text smaller for layout 4
-    if layout.get() == 4:
-        did_you_know_subtitle.font.size = Pt(16)
-    else:
-        did_you_know_subtitle.font.size = Pt(int(subtitle_size_var.get()))
-
-'''
-Create Did You Know text
-'''
-def add_did_you_know_text(slide, dress_did_you_know, left, top, width, height):
-    did_you_know_text_box = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
-    did_you_know_text_frame = did_you_know_text_box.text_frame
-
-    did_you_know_text_frame.word_wrap = True
-    did_you_know_text = did_you_know_text_frame.add_paragraph()
-    did_you_know_text.font.name = text_font_var.get()
-    did_you_know_text.text = f'{translateText(dress_did_you_know)}'
-
-    # make text smaller for layout 4
-    if layout.get() == 4:
-        did_you_know_text.font.size = Pt(11)
-    else:
-        did_you_know_text.font.size = Pt(int(text_size_var.get()))
-
-'''
-Add the dress image 
-'''
-def add_image(slide, dress_info, left, top):
-    image_width_px = int(pic_width_var.get())
-    image_height_px = int(pic_height_var.get())
-    image_width_inch = image_width_px / 96
-    image_height_inch = image_height_px / 96
-
-    # change image size for layout 4 
-    if layout.get() == 4:
-        image_width_inch = 3.71
-        image_height_inch = 4.94
-
-    try:
-        picture = slide.shapes.add_picture(f'./images/Slide{dress_info["id"]}.png', 0, Inches(0.83), Inches(image_width_inch), Inches(image_height_inch))
-    except FileNotFoundError:
-        # tk.messagebox.showerror(title="Error", message="When the Download Images check box is not checked make sure you have an images \
-        #                                                 directory in the root of this project that includes the correct images. (example: 1 == Slide1.PNG)")
-        print(f'Image Slide{dress_info["id"]}.png Not Found!')
-
-'''
-Create the Dress Id & Page Number text
-'''
-def add_numbering(slide, dress_info, index, left, top, width, height, left2, top2, width2, height2):
-    # show both page num & dress id
-    if numbering.get() == 1:
-        # dress id (left, top, width, height)
-        dress_id_box = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
-        dress_id_box_frame = dress_id_box.text_frame
-
-        dress_id = dress_id_box_frame.add_paragraph()
-        dress_id.font.name = text_font_var.get()
-        dress_id.text = translateText(f'Dress ID: {dress_info["id"]}')
-        
-        # aligns text left & make text smaller
-        if layout.get() == 4:
-            dress_id.alignment = PP_ALIGN.LEFT
-            dress_id.font.size = Pt(11)
-        else:
-            dress_id.alignment = PP_ALIGN.RIGHT
-            dress_id.font.size = Pt(int(text_size_var.get()))
-
-        # page number (left, top, width, height)
-        page_number_box = slide.shapes.add_textbox(Inches(left2), Inches(top2), Inches(width2), Inches(height2))
-        page_number_box_frame = page_number_box.text_frame
-
-        page_number = page_number_box_frame.add_paragraph()
-        page_number.font.name = text_font_var.get()
-        page_number.text = translateText(f'Page No. {index+1}')
-
-        # aligns text left & make text smaller
-        if layout.get() == 4:
-            page_number.alignment = PP_ALIGN.LEFT
-            page_number.font.size = Pt(11)
-        else:
-            page_number.alignment = PP_ALIGN.RIGHT
-            page_number.font.size = Pt(int(text_size_var.get()))
-    # show page num or dress id
-    elif numbering.get() == 2 or numbering.get() == 3:
-        number_box = slide.shapes.add_textbox(Inches(left2), Inches(top2), Inches(width2), Inches(height2))
-        number_box_frame = number_box.text_frame
-
-        number_box = number_box_frame.add_paragraph()
-        number_box.font.name = text_font_var.get()
-
-        # aligns text left & make text smaller
-        if layout.get() == 4:
-            number_box.alignment = PP_ALIGN.LEFT
-            number_box.font.size = Pt(11)
-        else:
-            number_box.alignment = PP_ALIGN.RIGHT
-            number_box.font.size = Pt(int(text_size_var.get()))
-
-        # show page num
-        if numbering.get() == 2:
-            number_box.text = translateText(f'Page No. {index+1}')
-        # show dress id
-        elif numbering.get() == 3:
-            number_box.text = translateText(f'Dress ID: {dress_info["id"]}')
-
-'''
 Performs update once generate button clicked
 '''
 def generateBook():
-    # check if Generate from Local is active
-    if gen_local.get() == 1:
-        # get update for dress number input
-        update_dress_list = []
-        # get dress numbers from text field
-        get_text_field = text_field.get("1.0", "end-1c").split(',')
-        
-        # add to list
-        for number in get_text_field:
-            if (number.strip().isnumeric()):
-                update_dress_list.append(int(number.strip()))
-        
-        # remove duplicates
-        dress_ids = []
-        [dress_ids.append(x) for x in update_dress_list if x not in dress_ids]
-
-        # path to local Excel data
-        file_path = "APIData.xlsx"
-
-        # gets and cleans dress data from Excel file
-        sheet_dress_data = pd.read_excel(file_path)
-        sheet_dress_data.dropna(subset=['id'], inplace=True) # drops any rows with na ID
-        sheet_dress_data['description'].fillna('', inplace=True) # removes na/nan from description column
-        sheet_dress_data['did_you_know'].fillna('', inplace=True) # removes na/nan from did_you_know column
-        sheet_dress_data['description'] = sheet_dress_data['description'].astype(str).apply(openpyxl.utils.escape.unescape) # convert escaped strings to ASCII
-        sheet_dress_data['did_you_know'] = sheet_dress_data['did_you_know'].astype(str).apply(openpyxl.utils.escape.unescape) # Convert escaped strings to ASCII
-        
-        # holds dress data from local Excel sheet
-        dress_data = [] 
-        # cycle through dress_ids and append data from excel sheet to dress_data
-        for id in dress_ids:
-            row = sheet_dress_data.loc[id-1]
-            dress_data.append({'id':row.loc['id'], 'name':row.loc['name'], 'description':row.loc['description'], 'did_you_know':row.loc['did_you_know']})   
-    else:
-        dress_data = apiRunner() # gather all dress data from api
-    
+    # gather all dress data from api
+    dress_data = apiRunner()
     # sort dress data
     sorted_dress_data = sortDresses(dress_data)
 
@@ -533,7 +283,6 @@ def generateBook():
         dress_name = dress_info['name']
         dress_description = dress_info['description']
         dress_did_you_know = dress_info['did_you_know']
-        dress_description_len = len(dress_description)
 
         #--------------------------------Portrait--------------------------------
         # PORTRAIT MODE
@@ -542,90 +291,320 @@ def generateBook():
             prs.slide_height = pptx.util.Inches(10.83) # define slide height
             slide_layout = prs.slide_layouts[5] # use slide with only title
             slide_layout2 = prs.slide_layouts[6] # use empty slide
+            slide_title = prs.slides.add_slide(slide_layout) # add empty slide to pptx
+            slide_empty = prs.slides.add_slide(slide_layout2)
 
-            # LAYOUT 1 == picture on left page - text on right page - two page
+            def add_text(slide):
+                # title (left, top, width, height)
+                title = slide.shapes.title
+                title.left = Inches(0)
+                title.top = Inches(0.43)
+                title.width = Inches(7.5)
+                title.height = Inches(0.91)
+                title.text = f'{dress_name.upper()}'
+
+                title.text_frame.paragraphs[0].font.color.rgb = RGBColor(0x09, 0x09, 0x82)
+                title.text_frame.paragraphs[0].text = title.text_frame.paragraphs[0].text.upper()
+                title.text_frame.paragraphs[0].font.name = title_font_var.get()
+                title.text_frame.paragraphs[0].font.size = Pt(int(title_size_var.get()))
+                title.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+                
+                # description subtitle highlight
+                rectangle1 = slide.shapes.add_shape(1, Inches(0.37), Inches(2.41), Inches(2.44), Inches(0.3))
+                rectangle1.rotation = 357
+
+                ## color fill
+                fill1 = rectangle1.fill
+                fill1.solid()
+                fill1.fore_color.rgb = RGBColor(202, 246, 189)
+
+                ## no outline
+                line1 = rectangle1.line
+                line1.color.rgb = RGBColor(255, 255, 255)
+
+                ## no shaddow
+                shadow1 = rectangle1.shadow
+                shadow1.inherit = False
+
+                # did you know subtitle highlight
+                rectangle2 = slide.shapes.add_shape(1, Inches(0.37), Inches(8.37), Inches(2.78), Inches(0.3))
+                rectangle2.rotation = 357
+
+                ## color fill
+                fill2 = rectangle2.fill
+                fill2.solid()
+                fill2.fore_color.rgb = RGBColor(202, 246, 189)
+
+                ## no outline
+                line2 = rectangle2.line
+                line2.color.rgb = RGBColor(255, 255, 255)
+
+                # no shaddow
+                shadow2 = rectangle2.shadow
+                shadow2.inherit = False
+
+                # description - subtitle (left, top, width, height)
+                description_subtitle_box = slide.shapes.add_textbox(Inches(0.28), Inches(1.99), Inches(6.94), Inches(0.51))
+                description_subtitle_frame = description_subtitle_box.text_frame
+
+                description_subtitle = description_subtitle_frame.add_paragraph()
+                description_subtitle.font.color.rgb = RGBColor(0x6E, 0xD8, 0xFF)
+                description_subtitle.font.bold = True
+                description_subtitle.font.name = subtitle_font_var.get()
+                description_subtitle.font.size = Pt(int(subtitle_size_var.get()))
+                description_subtitle.text = translateText("DESCRIPTION:")
+
+                # description - text (left, top, width, height)
+                description_text_box = slide.shapes.add_textbox(Inches(0.28), Inches(2.49), Inches(6.94), Inches(5.28))
+                description_text_frame = description_text_box.text_frame
+
+                description_text_frame.word_wrap = True
+                description_text = description_text_frame.add_paragraph()
+                description_text.font.name = text_font_var.get()
+                description_text.font.size = Pt(int(text_size_var.get()))
+                description_text.text = f'{translateText(dress_description)}'
+
+                # did you know - subtitle (left, top, width, height)
+                did_you_know_subtitle_box = slide.shapes.add_textbox(Inches(0.28), Inches(7.97), Inches(6.94), Inches(0.51))
+                did_you_know_subtitle_frame = did_you_know_subtitle_box.text_frame
+
+                did_you_know_subtitle = did_you_know_subtitle_frame.add_paragraph()
+                did_you_know_subtitle.font.color.rgb = RGBColor(0x6E, 0xD8, 0xFF)
+                did_you_know_subtitle.font.bold = True
+                did_you_know_subtitle.font.name = subtitle_font_var.get()
+                did_you_know_subtitle.font.size = Pt(int(subtitle_size_var.get()))
+                did_you_know_subtitle.text = translateText("DID YOU KNOW?")
+
+                # did you know - text (left, top, width, height)
+                did_you_know_text_box = slide.shapes.add_textbox(Inches(0.28), Inches(8.48), Inches(6.94), Inches(0.81))
+                did_you_know_text_frame = did_you_know_text_box.text_frame
+
+                did_you_know_text_frame.word_wrap = True
+                did_you_know_text = did_you_know_text_frame.add_paragraph()
+                did_you_know_text.font.name = text_font_var.get()
+                did_you_know_text.font.size = Pt(int(text_size_var.get()))
+                did_you_know_text.text = f'{translateText(dress_did_you_know)}'
+
+                # show both page num & dress id
+                if numbering.get() == 1:
+                    # dress id (left, top, width, height)
+                    dress_id_box = slide.shapes.add_textbox(Inches(4.47), Inches(9.55), Inches(1.28), Inches(0.34))
+                    dress_id_box_frame = dress_id_box.text_frame
+
+                    dress_id = dress_id_box_frame.add_paragraph()
+                    dress_id.font.name = text_font_var.get()
+                    dress_id.font.size = Pt(int(text_size_var.get()))
+                    dress_id.alignment = PP_ALIGN.RIGHT
+                    dress_id.text = translateText(f'Dress ID: {dress_info["id"]}')
+                    print(f"-- DEBUG -- {dress_id.text}")
+
+                    # page number (left, top, width, height)
+                    page_number_box = slide.shapes.add_textbox(Inches(5.94), Inches(9.55), Inches(1.28), Inches(0.34))
+                    page_number_box_frame = page_number_box.text_frame
+
+                    page_number = page_number_box_frame.add_paragraph()
+                    page_number.font.name = text_font_var.get()
+                    page_number.alignment = PP_ALIGN.RIGHT
+                    page_number.font.size = Pt(int(text_size_var.get()))
+                    page_number.text = translateText(f'Page No. {index+1}')
+
+                # show page num or dress id
+                elif numbering.get() == 2 or numbering.get() == 3:
+                    number_box = slide.shapes.add_textbox(Inches(5.94), Inches(9.55), Inches(1.28), Inches(0.34))
+                    number_box_frame = number_box.text_frame
+
+                    number_box = number_box_frame.add_paragraph()
+                    number_box.font.name = text_font_var.get()
+                    number_box.alignment = PP_ALIGN.RIGHT
+                    number_box.font.size = Pt(int(text_size_var.get()))
+
+                    # show page num
+                    if numbering.get() == 2:
+                        number_box.text = translateText(f'Page No. {index+1}')
+                    # show dress id
+                    elif numbering.get() == 3:
+                        number_box.text = translateText(f'Dress ID: {dress_info["id"]}')
+
+            def add_image(slide):
+                # image  
+                image_width_px = int(pic_width_var.get())
+                image_height_px = int(pic_height_var.get())
+                image_width_inch = image_width_px / 96
+                image_height_inch = image_height_px / 96
+
+                try:
+                    picture = slide.shapes.add_picture(f'./images/{dress_info["image_url"]}', 0, Inches(0.83), Inches(image_width_inch), Inches(image_height_inch))
+                except FileNotFoundError:
+                    # tk.messagebox.showerror(title="Error", message="When the Download Images check box is not checked make sure you have an images \
+                    #                                                 directory in the root of this project that includes the correct images. (example: 1 == Slide1.PNG)")
+                    print(f'Image {dress_info["image_url"]} Not Found!')
+
             if layout.get() == 1:
-                slide_empty = prs.slides.add_slide(slide_layout2) 
-                slide_title = prs.slides.add_slide(slide_layout) 
-
-                add_image(slide_empty, dress_info, 0, 0)
-                add_title_box(slide_title, dress_name, 0, 0.15, 7.5, 0.91) 
-                add_subtitle_highlight(slide_title, 0.37, 1.58, 2.44, 0.3) # description - highlight box
-                add_description_subtitle(slide_title, 0.28, 1.07, 6.94, 0.51)
-                add_description_text(slide_title, dress_description, 0.28, 1.65, 6.94, 5.99)
-                add_subtitle_highlight(slide_title, 0.37, 8.36, 2.78, 0.3) # did you know - highlight box
-                add_did_you_know_subtitle(slide_title, 0.28, 7.87, 6.94, 0.51)
-                add_did_you_know_text(slide_title, dress_did_you_know, 0.28, 8.46, 6.94, 1.04)
-                add_numbering(slide_title, dress_info, index, 4.47, 10.06, 1.28, 0.34, 5.94, 10.06, 1.28, 0.34)
-
-            # LAYOUT 4 == picture on left - text on right - single page
-            elif layout.get() == 4: 
-                slide_title = prs.slides.add_slide(slide_layout) 
-
-                add_image(slide_title, dress_info, 0, 1.39)
-                add_title_box(slide_title, dress_name, 0, 0.09, 7.5, 0.91) 
-                add_subtitle_highlight(slide_title, 3.71, 1.21, 1.83, 0.23) # description - highlight box
-                add_description_subtitle(slide_title, 3.63, 0.88, 3.71, 0.37)
-                add_description_text(slide_title, dress_description, 3.63, 1.35, 3.71, 7.57)
-
-                # adjust the text height based on text length
-                if dress_description_len < 600:
-                    add_subtitle_highlight(slide_title, 3.72, 5.83, 1.83, 0.23) # did you know - highlight box
-                    add_did_you_know_subtitle(slide_title, 3.63, 5.42, 3.71, 0.37)
-                    add_did_you_know_text(slide_title, dress_did_you_know, 3.63, 5.94, 3.71, 0.91)
-
-                elif dress_description_len > 600 and dress_description_len < 1300:
-                    add_subtitle_highlight(slide_title, 3.72, 7.99, 1.83, 0.23) # did you know - highlight box
-                    add_did_you_know_subtitle(slide_title, 3.63, 7.58, 3.71, 0.37)
-                    add_did_you_know_text(slide_title, dress_did_you_know, 3.63, 8.1, 3.71, 0.91)
-                    
-                else:
-                    add_subtitle_highlight(slide_title, 3.72, 9.32, 1.83, 0.23) # did you know - highlight box
-                    add_did_you_know_subtitle(slide_title, 3.63, 8.91, 3.71, 0.37)
-                    add_did_you_know_text(slide_title, dress_did_you_know, 3.63, 9.43, 3.71, 0.91)
-
-                add_numbering(slide_title, dress_info, index, 0.49, 6.46, 1.33, 0.27, 1.95, 6.46, 1.33, 0.27)
- 
+                add_image(slide_empty)
+                add_text(slide_title)
+            elif layout.get() == 4:
+                add_text(slide_title)
+                add_image(slide_empty)
         #--------------------------------Landscape--------------------------------
         # LANDSCAPE MODE
         elif layout.get() == 2 or layout.get() == 3:
-            left = None
-            image_left = None
-            rectangle_left = None
-
             # slide size (left, top, width, height)
-            prs.slide_width = pptx.util.Inches(16.18) # define slide width
-            prs.slide_height = pptx.util.Inches(12.53) # define slide height
-            slide_layout = prs.slide_layouts[5] # use empty slide
+            prs.slide_width = pptx.util.Inches(13.94) # define slide width
+            prs.slide_height = pptx.util.Inches(9.4) # define slide height
+            slide_layout = prs.slide_layouts[6] # use empty slide
             slide = prs.slides.add_slide(slide_layout) # add empty slide to pptx
 
+            # title (left, top, width, height)
+            title_box = slide.shapes.add_textbox(Inches(0), Inches(0), Inches(13.94), Inches(0.91))
+            title_box_frame = title_box.text_frame
+
+            title = title_box_frame.add_paragraph()
+            title.alignment = PP_ALIGN.CENTER 
+            title.font.name = title_font_var.get()
+            title.font.size = Pt(int(title_size_var.get()))
+            title.text = f'{dress_name.upper()}'
+            title.font.color.rgb = RGBColor(0x09, 0x09, 0x82)
+            
+            #--------------------------------Left & Right Position--------------------------------
+            
             # LAYOUT 2 == picture on right - text on left
             if layout.get() == 2:
-                rectangle_left = 0.4
-                left = 0.34
-                image_left = 8.45
-                image_top = 1.17
-                numbering1_left = 1.05
-                numbering2_left = 2.53
+                # aligns boxes to the left
+                left = Inches(0.44)
+                image_left = Inches(8.7)
+                rectangle_left = Inches(0.53)
 
             # LAYOUT 3 == picture on left - text on right
             elif layout.get() == 3:
-                image_left = 0.25
-                image_top = 1.17
-                rectangle_left = 8.15
-                left = 8.09
-                numbering1_left = 12.78
-                numbering2_left = 14.26
+                # aligns boxes to the right
+                left = Inches(5.53)
+                image_left = Inches(0.47)
+                rectangle_left = Inches(5.59)
+            #-------------------------------------------------------------------------------------
 
-            add_title_box(slide, dress_name, 0, 0.15, 16.18, 0.91) 
-            add_subtitle_highlight(slide, rectangle_left, 1.75, 2.44, 0.3) # decription - highlight box
-            add_description_subtitle(slide, left, 1.26, 7.81, 0.51)
-            add_description_text(slide, dress_description, left, 1.88, 7.81, 5.35)
-            add_subtitle_highlight(slide, rectangle_left, 8.04, 2.76, 0.28) # did you know - highlight box
-            add_did_you_know_subtitle(slide, left, 7.56, 7.81, 0.51)
-            add_did_you_know_text(slide, dress_did_you_know, left, 8.19, 7.81, 1.11)
-            add_numbering(slide, dress_info, index, numbering1_left, 11.08, 1.28, 0.34, numbering2_left, 11.08, 1.28, 0.34)
-            add_image(slide, dress_info, image_left, image_top)
+            # description subtitle highlight
+            rectangle1 = slide.shapes.add_shape(1, rectangle_left, Inches(1.75), Inches(2.44), Inches(0.3))
+            rectangle1.rotation = 357
+
+            ## color fill
+            fill1 = rectangle1.fill
+            fill1.solid()
+            fill1.fore_color.rgb = RGBColor(202, 246, 189)
+
+            ## no outline
+            line1 = rectangle1.line
+            line1.color.rgb = RGBColor(255, 255, 255)
+
+            ## no shaddow
+            shadow1 = rectangle1.shadow
+            shadow1.inherit = False
+
+            # did you know subtitle highlight
+            rectangle2 = slide.shapes.add_shape(1, rectangle_left, Inches(6.83), Inches(2.76), Inches(0.28))
+            rectangle2.rotation = 357
+
+            ## color fill
+            fill2 = rectangle2.fill
+            fill2.solid()
+            fill2.fore_color.rgb = RGBColor(202, 246, 189)
+
+            ## no outline
+            line2 = rectangle2.line
+            line2.color.rgb = RGBColor(255, 255, 255)
+
+            # no shaddow
+            shadow2 = rectangle2.shadow
+            shadow2.inherit = False
+            
+            # description - subtitle (left, top, width, height)
+            description_subtitle_box = slide.shapes.add_textbox(left, Inches(1.26), Inches(7.81), Inches(0.51))
+            description_subtitle_frame = description_subtitle_box.text_frame
+
+            description_subtitle = description_subtitle_frame.add_paragraph()
+            description_subtitle.font.color.rgb = RGBColor(0x6E, 0xD8, 0xFF)
+            description_subtitle.font.bold = True
+            description_subtitle.font.name = subtitle_font_var.get()
+            description_subtitle.font.size = Pt(int(subtitle_size_var.get()))
+            description_subtitle.text = translateText("DESCRIPTION:")
+
+            # description - text (left, top, width, height)
+            description_text_box = slide.shapes.add_textbox(left, Inches(1.76), Inches(7.81), Inches(4.58))
+            description_text_frame = description_text_box.text_frame
+
+            description_text_frame.word_wrap = True
+            description_text = description_text_frame.add_paragraph()
+            description_text.font.name = text_font_var.get()
+            description_text.font.size = Pt(int(text_size_var.get()))
+            description_text.text = f'{translateText(dress_description)}'
+
+            # did you know - subtitle (left, top, width, height)
+            did_you_know_subtitle_box = slide.shapes.add_textbox(left, Inches(6.35), Inches(7.81), Inches(0.51))
+            did_you_know_subtitle_frame = did_you_know_subtitle_box.text_frame
+
+            did_you_know_subtitle = did_you_know_subtitle_frame.add_paragraph()
+            did_you_know_subtitle.font.color.rgb = RGBColor(0x6E, 0xD8, 0xFF)
+            did_you_know_subtitle.font.bold = True
+            did_you_know_subtitle.font.name = subtitle_font_var.get()
+            did_you_know_subtitle.font.size = Pt(int(subtitle_size_var.get()))
+            did_you_know_subtitle.text = translateText("DID YOU KNOW?")
+
+            # did you know - text (left, top, width, height)
+            did_you_know_text_box = slide.shapes.add_textbox(left, Inches(6.85), Inches(7.81), Inches(0.57))
+            did_you_know_text_frame = did_you_know_text_box.text_frame
+
+            did_you_know_text_frame.word_wrap = True
+            did_you_know_text = did_you_know_text_frame.add_paragraph()
+            did_you_know_text.font.name = text_font_var.get()
+            did_you_know_text.font.size = Pt(int(text_size_var.get()))
+            did_you_know_text.text = f'{translateText(dress_did_you_know)}'
+
+            # image
+            try:
+                picture = slide.shapes.add_picture(f'./images/{dress_info["image_url"]}', image_left, Inches(1.26), Inches(4.68), Inches(6.25))
+            except FileNotFoundError:
+                # tk.messagebox.showerror(title="Error", message="When the Download Images check box is not checked make sure you have an images \
+                #                                                 directory in the root of this project that includes the correct images. (example: 1 == Slide1.PNG)")
+                print(f'Image {dress_info["image_url"]} Not Found!')
+
+            # show both page num & dress id
+            if numbering.get() == 1:
+                # dress id (left, top, width, height)
+                dress_id_box = slide.shapes.add_textbox(Inches(10.58), Inches(7.74), Inches(1.28), Inches(0.34))
+                dress_id_box_frame = dress_id_box.text_frame
+
+                dress_id = dress_id_box_frame.add_paragraph()
+                dress_id.font.name = text_font_var.get()
+                dress_id.font.size = Pt(int(text_size_var.get()))
+                dress_id.alignment = PP_ALIGN.RIGHT
+                dress_id.text = translateText(f'Dress ID: {dress_info["id"]}')
+                print(f"-- DEBUG -- {dress_id.text}")
+
+                # page number (left, top, width, height)
+                page_number_box = slide.shapes.add_textbox(Inches(12.06), Inches(7.74), Inches(1.28), Inches(0.34))
+                page_number_box_frame = page_number_box.text_frame
+
+                page_number = page_number_box_frame.add_paragraph()
+                page_number.font.name = text_font_var.get()
+                page_number.alignment = PP_ALIGN.RIGHT
+                page_number.font.size = Pt(int(text_size_var.get()))
+                page_number.text = translateText(f'Page No. {index+1}')
+
+            # show page num or dress id
+            elif numbering.get() == 2 or numbering.get() == 3:
+                number_box = slide.shapes.add_textbox(Inches(12.06), Inches(7.74), Inches(1.28), Inches(0.34))
+                number_box_frame = number_box.text_frame
+
+                number_box = number_box_frame.add_paragraph()
+                number_box.font.name = text_font_var.get()
+                number_box.alignment = PP_ALIGN.RIGHT
+                number_box.font.size = Pt(int(text_size_var.get()))
+
+                # show page num
+                if numbering.get() == 2:
+                    number_box.text = translateText(f'Page No. {index+1}')
+                # show dress id
+                elif numbering.get() == 3:
+                    number_box.text = translateText(f'Dress ID: {dress_info["id"]}')
     try:
         prs.save(file_name)
     except Exception as e:
@@ -633,7 +612,22 @@ def generateBook():
     finally:
         book_gen_generate_button.config(state="normal")
 
-    openPPT(file_name)
+    # Opens pptx depending on OS
+    current_os = platform.system()
+    try:
+        if current_os == "Windows":
+            print(f"-- DEBUG -- Windows {file_name}")
+            os.system(f"start {file_name}")
+        elif current_os == "Darwin":
+            print(f"-- DEBUG -- Darwin {file_name}")
+            os.system(f"open {file_name}")
+        elif current_os == "Linux":
+            print(f"-- DEBUG -- Linux {file_name}")
+            os.system(f"xdg-open {file_name}")
+        else:
+            print("Error: Cannot open file " + current_os + " not supported.")
+    except Exception as e:
+        print("Error:", e)
 
 '''
 Helper function to wrap text
@@ -645,57 +639,58 @@ def wrap(string, length=150):
 Order sort for treeview table
 '''
 def rowOrder(order, diff_dress_data, table):
-    if order == 'id':
-        table.delete(*table.get_children())
-        for index, data in enumerate(sorted(diff_dress_data, key=lambda x : x[0])):
-            # word wrap text
-            for i, cell in enumerate(data): 
-                data[i] = wrap(str(cell), 250)
-            # if even row, set tag to evenrow
-            # if odd row, set tag to oddrow
-            if index % 2 == 0:
-                table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
-            else:
-                table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
+    pass
+    # if order == 'id':
+    #     table.delete(*table.get_children())
+    #     for index, data in enumerate(sorted(diff_dress_data, key=lambda x : x[0])):
+    #     # word wrap text
+    #         for i, cell in enumerate(data): 
+    #             data[i] = wrap(str(cell), 250)
+    #         # if even row, set tag to evenrow
+    #         # if odd row, set tag to oddrow
+    #         if index % 2 == 0:
+    #             table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
+    #         else:
+    #             table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
+                
+    # elif order == 'name':
+    #     table.delete(*table.get_children())
+    #     for index, data in enumerate(sorted(diff_dress_data, key=lambda x : x[1])):
+    #     # word wrap text
+    #         for i, cell in enumerate(data): 
+    #             data[i] = wrap(str(cell), 250)
+    #         # if even row, set tag to evenrow
+    #         # if odd row, set tag to oddrow
+    #         if index % 2 == 0:
+    #             table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
+    #         else:
+    #             table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
 
-    elif order == 'name':
-        table.delete(*table.get_children())
-        for index, data in enumerate(sorted(diff_dress_data, key=lambda x : str(x[1]).lower())):
-            # word wrap text
-            for i, cell in enumerate(data): 
-                data[i] = wrap(str(cell), 250)
-            # if even row, set tag to evenrow
-            # if odd row, set tag to oddrow
-            if index % 2 == 0:
-                table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
-            else:
-                table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
+    # elif order == 'description':
+    #     table.delete(*table.get_children())
+    #     for index, data in enumerate(sorted(diff_dress_data, key=lambda x : x[2])):
+    #     # word wrap text
+    #         for i, cell in enumerate(data): 
+    #             data[i] = wrap(str(cell), 250)
+    #         # if even row, set tag to evenrow
+    #         # if odd row, set tag to oddrow
+    #         if index % 2 == 0:
+    #             table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
+    #         else:
+    #             table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
 
-    elif order == 'description':
-        table.delete(*table.get_children())
-        for index, data in enumerate(sorted(diff_dress_data, key=lambda x : str(x[2]).lower())):
-            # word wrap text
-            for i, cell in enumerate(data): 
-                data[i] = wrap(str(cell), 250)
-            # if even row, set tag to evenrow
-            # if odd row, set tag to oddrow
-            if index % 2 == 0:
-                table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
-            else:
-                table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
-
-    elif order == 'did_you_know':
-        table.delete(*table.get_children())
-        for index, data in enumerate(sorted(diff_dress_data, key=lambda x : str(x[3]).lower())):
-            # word wrap text
-            for i, cell in enumerate(data): 
-                data[i] = wrap(str(cell), 250)
-            # if even row, set tag to evenrow
-            # if odd row, set tag to oddrow
-            if index % 2 == 0:
-                table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
-            else:
-                table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))    
+    # elif order == 'did_you_know':
+    #     table.delete(*table.get_children())
+    #     for index, data in enumerate(sorted(diff_dress_data, key=lambda x : x[1])):
+    #     # word wrap text
+    #         for i, cell in enumerate(data): 
+    #             data[i] = wrap(str(cell), 250)
+    #         # if even row, set tag to evenrow
+    #         # if odd row, set tag to oddrow
+    #         if index % 2 == 0:
+    #             table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
+    #         else:
+    #             table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))    
 
 '''
 Exports table data to Excel file
@@ -705,40 +700,13 @@ def exportExcel(data, excel_columns, sheet_name):
     df.to_excel(f'{sheet_name}.xlsx', index=False)
 
 '''
-Exports difference report data to SQL update script
-'''
-def exportSQL(diff_dress_data):
-    sql_queries = [] # stores sql query
-
-    # cycle through the diff_dress_data and create queries for each
-    for data in diff_dress_data:
-        data[1] = str(data[1]).replace('"', '\\"') # replace " with \" so quotations don't mess up query
-        data[2] = str(data[2]).replace('"', '\\"') # replace " with \" so quotations don't mess up query
-        data[3] = str(data[3]).replace('"', '\\"') # replace " with \" so quotations don't mess up query
-        sql_queries.append(f'UPDATE dresses\nSET name="{data[1]}", description="{data[2]}", did_you_know="{data[3]}"\nWHERE id={data[0]};\n')
-    
-    # create path for sql script
-    update_script_path = 'abcdbook_SQL_update.sql'
-    update_script_name = 'abcdbook_SQL_update'
-    count = 1
-    while os.path.exists(update_script_path):
-        update_script_path = f'{update_script_name}({count}).sql'
-        count += 1
-
-    # write sql queries into .sql script
-    with open(update_script_path, 'w') as f:
-        for query in sql_queries:
-            f.write(f'{query}\n')
-
-'''
 Performs difference report on Excel sheet compared to API data
 '''
 def diffReport():
     # helper for table item selection
     def item_select(_):
-        if len(table.selection()) > 0:
-            for item in table.selection():
-                print(table.item(item)['values'])
+        for item in table.selection():
+            print(table.item(item)['values'])
 
     file_path = 'APIData.xlsx' # Change to path where file is located
 
@@ -762,15 +730,15 @@ def diffReport():
             # check if name, description, or did_you_know is different from the API data
             if row.loc['name'] != api_data['name']:
                 diff_dress_data.append([item for item in row])
-                # diff_dress_data[index][1] = f'-- DIFFERENT! -- {diff_dress_data[index][1]}'
+                diff_dress_data[index][1] = f'-- DIFFERENT! -- {diff_dress_data[index][1]}'
                 continue
             if row.loc['description'] != api_data['description']:
                 diff_dress_data.append([item for item in row])
-                # diff_dress_data[index][2] = f'-- DIFFERENT! -- {diff_dress_data[index][2]}'
+                diff_dress_data[index][2] = f'-- DIFFERENT! -- {diff_dress_data[index][2]}'
                 continue
             if row.loc['did_you_know'] != api_data['did_you_know']:
                 diff_dress_data.append([item for item in row])
-                # diff_dress_data[index][3] = f'-- DIFFERENT! -- {diff_dress_data[index][3]}'
+                diff_dress_data[index][3] = f'-- DIFFERENT! -- {diff_dress_data[index][3]}'
                 continue
 
         # find largest description field
@@ -799,7 +767,7 @@ def diffReport():
             style.configure('Treeview', rowheight=100)
         elif row_size_flag >= 1000:
             style.configure('Treeview', rowheight=150)
-        elif row_size_flag >= 2000:
+        elif row_size_flag >= 2500:
             style.configure('Treeview', rowheight=200)
         style.configure('Treeview.Heading', background='#848484', foreground='white')
 
@@ -859,12 +827,15 @@ def diffReport():
         btn_frame = tk.Frame(table_window)
         btn_frame.pack(side='bottom', pady=15)
         # create buttons and pack on button_frame
-        btn = tk.Button(btn_frame, text='Export SQL File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportSQL(diff_dress_data))
+        btn = tk.Button(btn_frame, text='Export SQL File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff")
         btn.pack(side='left', padx=25)
 
         excel_columns = ['id', 'name', 'description', 'did_you_know'] # column headers for exporting Excel
         btn2 = tk.Button(btn_frame, text='Export Excel File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportExcel(diff_dress_data, excel_columns, 'difference_report'))
         btn2.pack(side='left', padx=25)
+
+        # print ("Changes were made to the following dresses:")
+        # print(diff_dress_data)
 
     except FileNotFoundError:
         tk.messagebox.showerror(title="Error in diffReport", message=f"File '{file_path}' not found.")
@@ -1125,7 +1096,7 @@ layout.set(4)
 # layout frame
 layout_frame = tk.Frame(book_gen_frame)
 # layout radio buttons
-layout_radio4 = tk.Radiobutton(layout_frame, text="Picture on Left - Text on right - Single Page - Portrait Mode",
+layout_radio4 = tk.Radiobutton(layout_frame, text="Picture on Right Page - Text on Left Page - Two Page Mode - Portrait Mode",
                                 font=MAIN_FONT, variable=layout, value=4)
 layout_radio1 = tk.Radiobutton(layout_frame, text="Picture on Left Page - Text on Right Page - Two Page Mode - Portrait Mode",
                                 font=MAIN_FONT, variable=layout, value=1)
@@ -1297,10 +1268,7 @@ language = tk.StringVar()
 language.set(LANGUAGES[0])
 # Download image variable
 download_imgs = tk.IntVar()
-download_imgs.set(0)
-# Generate book from local Excel sheet
-gen_local = tk.IntVar()
-gen_local.set(0)
+download_imgs.set(1)
 
 # translate frame
 check_button_frame = tk.Frame(book_gen_frame)
@@ -1309,15 +1277,12 @@ translate_checkbutton = tk.Checkbutton(check_button_frame, text="Translate to:",
 # language options
 language_options = tk.OptionMenu(check_button_frame, language, *LANGUAGES)
 # download images
-download_images = tk.Checkbutton(check_button_frame, text="Download Images", font=MAIN_FONT, variable=download_imgs, onvalue=1, offvalue=0, command=lambda: gen_local.set(0))
-# generate book from local Excel sheet
-generate_from_local = tk.Checkbutton(check_button_frame, text="Generate from Local", font=MAIN_FONT, variable=gen_local, onvalue=1, offvalue=0, command=lambda: download_imgs.set(0))
+download_images = tk.Checkbutton(check_button_frame, text="Download Images", font=MAIN_FONT, variable=download_imgs, onvalue=1, offvalue=0)
 
 # pack translate options into translate frame
 translate_checkbutton.pack(side="left")
 language_options.pack(side="left")
 download_images.pack(side="left")
-generate_from_local.pack(side="left")
 # place translate frame on main frame
 check_button_frame.place(x=175, y=495)
 
