@@ -12,6 +12,7 @@ from pandas import Series, DataFrame
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from textblob import TextBlob
 from bs4 import BeautifulSoup
+import wikipediaapi
 
 # pip install googletrans
 # pip install googletrans==4.0.0-rc1
@@ -96,32 +97,8 @@ def apiRunner():
     dress_data = [] # dress data from API
     threads= [] # working threads
 
-    # progress bar window for API data retrieval
-    progress_window = tk.Toplevel(root)
-    progress_window.title('Retrieving API Data')
-    sw = int(progress_window.winfo_screenwidth()/2 - 450/2)
-    sh = int(progress_window.winfo_screenheight()/2 - 70/2)
-    progress_window.geometry(f'450x70+{sw}+{sh}')
-    progress_window.resizable(False, False)
-    progress_window.attributes('-disable', True)
-    progress_window.focus()
-
-    # progress bar custom style
-    pb_style = ttk.Style()
-    pb_style.theme_use('clam')
-    pb_style.configure('green.Horizontal.TProgressbar', foreground='#1ec000', background='#1ec000')
-
-    # frame to hold progress bar
-    pb_frame = tk.Frame(progress_window)
-    pb_frame.pack()
-
-    # progress bar
-    pb = ttk.Progressbar(pb_frame, length=400, style='green.Horizontal.TProgressbar', mode='determinate', maximum=100, value=0)
-    pb.pack(pady=10)
-
-    # label for percent complete
-    percent_label = tk.Label(pb_frame, text='Retrieving API Data...0%')
-    percent_label.pack()
+    # create progress bar
+    progress_window, pb, percent_label = progress_bar('Retrieving API Data')
 
     # spins up 10 threads at a time and stores retrieved data into dress_data upon completion
     with ThreadPoolExecutor(max_workers=10) as exec:
@@ -188,9 +165,31 @@ def imageRunner(dress_data):
         url_list.append(f'http://projectabcd.com/images/dress_images/{data["image_url"]}')
         img_name_list.append(f'{data["image_url"]}')
 
+    # create progress bar
+    progress_window, pb, percent_label = progress_bar('Downloading Images')
+
+    threads= [] # working threads
+
+    # spins up 10 threads at a time and calls downloadImages with url and image name
+    with ThreadPoolExecutor(max_workers=10) as exec:
+        for index, url in enumerate(url_list):
+            threads.append(exec.submit(downloadImages, "images", url, img_name_list[index]))
+
+        complete = 0 # number of threads that have finished
+        for task in as_completed(threads):
+            complete += 1
+            pb['value'] = (complete/len(url_list))*100 # calculate percentage of images downloaded
+            percent_label.config(text=f'Downloading Images...{int(pb["value"])}%') # update completion percent label
+    
+    progress_window.destroy() # close progress bar window
+
+'''
+Generates progress bar
+'''
+def progress_bar(title):
     # progress bar window for API data retrieval
     progress_window = tk.Toplevel(root)
-    progress_window.title('Downloading Images')
+    progress_window.title(title)
     sw = int(progress_window.winfo_screenwidth()/2 - 450/2)
     sh = int(progress_window.winfo_screenheight()/2 - 70/2)
     progress_window.geometry(f'450x70+{sw}+{sh}')
@@ -212,23 +211,10 @@ def imageRunner(dress_data):
     pb.pack(pady=10)
 
     # label for percent complete
-    percent_label = tk.Label(pb_frame, text='Downloading Images...0%')
+    percent_label = tk.Label(pb_frame, text=f'{title}...0%')
     percent_label.pack()
 
-    threads= [] # working threads
-
-    # spins up 10 threads at a time and calls downloadImages with url and image name
-    with ThreadPoolExecutor(max_workers=10) as exec:
-        for index, url in enumerate(url_list):
-            threads.append(exec.submit(downloadImages, "images", url, img_name_list[index]))
-
-        complete = 0 # number of threads that have finished
-        for task in as_completed(threads):
-            complete += 1
-            pb['value'] = (complete/len(url_list))*100 # calculate percentage of images downloaded
-            percent_label.config(text=f'Downloading Images...{int(pb["value"])}%') # update completion percent label
-    
-    progress_window.destroy() # close progress bar window
+    return progress_window, pb, percent_label
 
 '''
 Translate text to selected language 
@@ -732,69 +718,97 @@ def wrap(string, length=150):
     return '\n'.join(textwrap.wrap(string, length))
 
 '''
-Order sort for treeview table
+Generates treeview table of data
 '''
-def rowOrder(order, diff_dress_data, table):
-    if order == 'id':
-        table.delete(*table.get_children())
-        for index, data in enumerate(sorted(diff_dress_data, key=lambda x : x[0])):
-            # word wrap text
-            for i, cell in enumerate(data): 
-                if len(str(data[i])) > 2500:
-                    data[i] = wrap(str(cell), 400)
-                else:
-                    data[i] = wrap(str(cell), 250)
-            # if even row, set tag to evenrow
-            # if odd row, set tag to oddrow
-            if index % 2 == 0:
-                table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
-            else:
-                table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
+def generate_table(table_data, report_name, column_headers, row_h, col_w, anchor_point, num_buttons=2):
+    # create window to display table
+    table_window = tk.Toplevel(root)
+    table_window.title(report_name)
+    table_window.geometry(f"1000x600")
+    table_window.minsize(1000,600)
 
-    elif order == 'name':
-        table.delete(*table.get_children())
-        for index, data in enumerate(sorted(diff_dress_data, key=lambda x : str(x[1]).lower())):
-            # word wrap text
-            for i, cell in enumerate(data): 
-                if len(str(data[i])) > 2500:
-                    data[i] = wrap(str(cell), 400)
-                else:
-                    data[i] = wrap(str(cell), 250)
-            # if even row, set tag to evenrow
-            # if odd row, set tag to oddrow
-            if index % 2 == 0:
-                table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
-            else:
-                table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
+    # create frame to hold table
+    table_frame = tk.Frame(table_window)
+    table_frame.pack_propagate(False)
+    table_frame.place(x=0, y=0, relwidth=1, relheight=.89, anchor="nw")
 
-    elif order == 'description':
-        table.delete(*table.get_children())
-        for index, data in enumerate(sorted(diff_dress_data, key=lambda x : str(x[2]).lower())):
-            # word wrap text
-            for i, cell in enumerate(data): 
-                if len(str(data[i])) > 2500:
-                    data[i] = wrap(str(cell), 400)
-                else:
-                    data[i] = wrap(str(cell), 250)
-            # if even row, set tag to evenrow
-            # if odd row, set tag to oddrow
-            if index % 2 == 0:
-                table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
-            else:
-                table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
+    # using style to set row height and heading colors
+    style = ttk.Style()
+    style.theme_use('clam')
+    style.configure('Treeview', rowheight=row_h)
+    style.configure('Treeview.Heading', background='#848484', foreground='white')
 
-    elif order == 'did_you_know':
-        table.delete(*table.get_children())
-        for index, data in enumerate(sorted(diff_dress_data, key=lambda x : str(x[3]).lower())):
-            # word wrap text
-            for i, cell in enumerate(data): 
+    # vertical scrollbar
+    table_scrolly = tk.Scrollbar(table_frame)
+    table_scrolly.pack(side="right", fill='y')
+    # horizontal scrollbar
+    table_scrollx = tk.Scrollbar(table_frame, orient='horizontal')
+    table_scrollx.pack(side="bottom", fill='x')
+
+    # use ttk Treeview to create table
+    table = ttk.Treeview(table_frame, yscrollcommand=table_scrolly.set, xscrollcommand=table_scrollx.set, columns=column_headers, show='headings')
+
+    # configure the scroll bars with the table
+    table_scrolly.config(command=table.yview)
+    table_scrollx.config(command=table.xview)
+
+    # create the headers and set column variables
+    for index, column_header in enumerate(column_headers):
+        table.heading(column_header, text=column_header)
+        if index == 0:
+            table.column(column_header, width=75, stretch=False)
+        elif index == 1:
+            table.column(column_header, width=145, stretch=False)
+        else:
+            table.column(column_header, width=col_w, stretch=False, anchor=anchor_point)
+
+    # pack table into table_frame
+    table.pack(fill='both', expand=True)
+
+    # fill table with difference report data
+    for index, data in enumerate(table_data):
+        # word wrap text
+        for i, cell in enumerate(data): 
+            if len(str(data[i])) > 2000:
+                data[i] = wrap(str(cell), 400)
+            else:
                 data[i] = wrap(str(cell), 250)
+
+        # if new row, set tag to new
+        # if changed row, set tag to changed
+        if data[-1] == 'new':
+            table.insert(parent='', index=tk.END, values=data, tags=('new',))
+        elif data[-1] == 'changed':
+            table.insert(parent='', index=tk.END, values=data, tags=('changed',))
+        else:
             # if even row, set tag to evenrow
             # if odd row, set tag to oddrow
             if index % 2 == 0:
                 table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
             else:
                 table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
+
+    # color rows
+    table.tag_configure('new', background='#BAFFA4')
+    table.tag_configure('changed', background='#FFA5A4')
+    table.tag_configure('evenrow', background='#e8f3ff')
+    table.tag_configure('oddrow', background='#f7f7f7')
+
+    # create button frame and place one table_window
+    btn_frame = tk.Frame(table_window)
+    btn_frame.pack(side='bottom', pady=15)
+    
+    if num_buttons == 2:
+        # create buttons and pack on button_frame
+        btn = tk.Button(btn_frame, text='Export SQL File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportSQL(table_data, column_headers, report_name))
+        btn.pack(side='left', padx=25)
+
+        btn2 = tk.Button(btn_frame, text='Export to HTML', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportHTML(table_data, column_headers, report_name))
+        btn2.pack(side='left', padx=25)
+
+    elif num_buttons == 1:
+        btn = tk.Button(btn_frame, text='Export to HTML', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportHTML(table_data, column_headers, report_name))
+        btn.pack(side='left', padx=25)
 
 '''
 Exports table data to Excel file
@@ -806,31 +820,55 @@ def exportExcel(data, excel_columns, sheet_name):
 '''
 Exports difference report data to SQL update script
 '''
-def exportSQL(diff_dress_data, changed_or_new):
-    sql_queries = [] # stores sql query
+def exportSQL(dress_data, column_headers, report_name):
+    if report_name == 'difference_report':
+        sql_queries = [] # stores sql query
 
-    # cycle through the diff_dress_data and create queries for each
-    for index, data in enumerate(diff_dress_data):
-        data[1] = str(data[1]).replace('"', '\\"') # replace " with \" so quotations don't mess up query
-        data[2] = str(data[2]).replace('"', '\\"') # replace " with \" so quotations don't mess up query
-        data[3] = str(data[3]).replace('"', '\\"') # replace " with \" so quotations don't mess up query
-        if changed_or_new[index] == 'changed':
-            sql_queries.append(f'UPDATE dresses\nSET name="{data[1]}", description="{data[2]}", did_you_know="{data[3]}"\nWHERE id={data[0]};\n')
-        elif changed_or_new[index] == 'new':
-            sql_queries.append(f'INSERT INTO dresses (id, name, description, did_you_know)\nVALUES ({data[0]}, "{data[1]}", "{data[2]}", "{data[3]}");\n')
-    
-    # create path for sql script
-    update_script_path = 'abcdbook_SQL_update.sql'
-    update_script_name = 'abcdbook_SQL_update'
-    count = 1
-    while os.path.exists(update_script_path):
-        update_script_path = f'{update_script_name}({count}).sql'
-        count += 1
+        # cycle through the diff_dress_data and create queries for each
+        for index, data in enumerate(dress_data):
+            data[1] = str(data[1]).replace('"', '\\"') # replace " with \" so quotations don't mess up query
+            data[2] = str(data[2]).replace('"', '\\"') # replace " with \" so quotations don't mess up query
+            data[3] = str(data[3]).replace('"', '\\"') # replace " with \" so quotations don't mess up query
+            if data[-1] == 'changed':
+                sql_queries.append(f'UPDATE dresses\nSET name="{data[1]}", description="{data[2]}", did_you_know="{data[3]}"\nWHERE id={data[0]};\n')
+            elif data[-1] == 'new':
+                sql_queries.append(f'INSERT INTO dresses (id, name, description, did_you_know)\nVALUES ({data[0]}, "{data[1]}", "{data[2]}", "{data[3]}");\n')
+        
+        # create path for sql script
+        update_script_path = 'abcdbook_SQL_update.sql'
+        update_script_name = 'abcdbook_SQL_update'
+        count = 1
+        while os.path.exists(update_script_path):
+            update_script_path = f'{update_script_name}({count}).sql'
+            count += 1
 
-    # write sql queries into .sql script
-    with open(update_script_path, 'w') as f:
-        for query in sql_queries:
-            f.write(f'{query}\n')
+        # write sql queries into .sql script
+        with open(update_script_path, 'w') as f:
+            for query in sql_queries:
+                f.write(f'{query}\n')
+
+    elif report_name == 'wiki_link_report':
+        with open(f'{report_name}_update.sql', 'w') as sql_file:
+            # Create SQL CREATE TABLE statement
+            create_table_query = f'CREATE TABLE IF NOT EXISTS resources (\n'
+            create_table_query += ', '.join(f'{column} TEXT' for column in column_headers)
+            create_table_query += '\n);\n\n'
+            sql_file.write(create_table_query)
+
+            # Create SQL INSERT INTO statement
+            sql_file.write(f'INSERT INTO resources ({", ".join(column_headers)}) VALUES\n')
+
+            # Iterate through data and write values
+            for row in dress_data:
+                values = ', '.join(f"'{str(value)}'" for value in row)
+                sql_file.write(f'({values}),\n')
+
+            # Remove the trailing comma from the last line
+            sql_file.seek(sql_file.tell() - 2)
+            sql_file.truncate()
+
+            # Add a semicolon to the end of the SQL script
+            sql_file.write(';')
 
 '''
 Exports data to JQuery data table HTML page
@@ -896,17 +934,10 @@ def exportHTML(data, column_headers, file_name):
 Performs difference report on Excel sheet compared to API data
 '''
 def diffReport():
-    # helper for table item selection
-    def item_select(_):
-        if len(table.selection()) > 0:
-            for item in table.selection():
-                print(table.item(item)['values'])
-
     file_path = 'APIData.xlsx' # Change to path where file is located
 
     dress_ids = sorted(getSlideNumbers()) # gets dress IDs in entry field
     diff_dress_data = [] # data in spreadsheet that is different from API
-    changed_or_new = [] # to keep track of what is changed data or new data
     api_dress_data = sorted(apiRunner(), key=lambda x : x['id']) # gets dress data from API and sorts by ID
 
     try:
@@ -919,127 +950,37 @@ def diffReport():
         sheet_dress_data['did_you_know'] = sheet_dress_data['did_you_know'].astype(str).apply(openpyxl.utils.escape.unescape) # Convert escaped strings to ASCII
 
         # cycle through api_dress_data
-        for index, api_data in enumerate(api_dress_data):
+        for api_data in api_dress_data:
             # row of data with an ID that matches api_data ID
             row = sheet_dress_data.loc[api_data['id']-1] # row of data in spreadsheet
 
             # check if name, description, or did_you_know is different from the API data
             if row.loc['name'] != api_data['name']:
-                diff_dress_data.append([item for item in row])
-                changed_or_new.append('changed')
+                new_row = [item for item in row]
+                new_row.append('changed')
+                diff_dress_data.append(new_row)
                 continue
             if row.loc['description'] != api_data['description']:
-                diff_dress_data.append([item for item in row])
-                changed_or_new.append('changed')
+                new_row = [item for item in row]
+                new_row.append('changed')
+                diff_dress_data.append(new_row)
                 continue
             if row.loc['did_you_know'] != api_data['did_you_know']:
-                diff_dress_data.append([item for item in row])
-                changed_or_new.append('changed')
+                new_row = [item for item in row]
+                new_row.append('changed')
+                diff_dress_data.append(new_row)
                 continue
 
         # check for new entries in Excel sheet that do not exist in retrieved api data
         for id in dress_ids:
             if not any(data['id'] == id for data in api_dress_data) and (sheet_dress_data['id']==id).any():
                 row = sheet_dress_data.loc[sheet_dress_data['id']==id]
-                diff_dress_data.append([item for item in row.values[0]])
-                changed_or_new.append('new')
+                new_row = [item for item in row.values[0]]
+                new_row.append('new')
+                diff_dress_data.append(new_row)
 
-        # find largest description field
-        row_size_flag = 0
-        for value in diff_dress_data:
-            if len(str(value[2])) > row_size_flag:
-                row_size_flag = len(str(value[2]))
-
-        # create window to display table
-        table_window = tk.Toplevel(root)
-        table_window.title("Difference Report")
-        table_window.geometry(f"1000x600")
-        table_window.minsize(1000,600)
-
-        # create frame to hold table
-        table_frame = tk.Frame(table_window)
-        table_frame.pack_propagate(False)
-        table_frame.place(x=0, y=0, relwidth=1, relheight=.89, anchor="nw")
-
-        # using style to set row height and heading colors
-        style = ttk.Style()
-        style.theme_use('clam')
-        if row_size_flag < 500:
-            style.configure('Treeview', rowheight=75)
-        elif row_size_flag >= 500 and row_size_flag < 1000:
-            style.configure('Treeview', rowheight=100)
-        elif row_size_flag >= 1000 and row_size_flag < 2000:
-            style.configure('Treeview', rowheight=150)
-        elif row_size_flag >= 2000:
-            style.configure('Treeview', rowheight=200)
-        style.configure('Treeview.Heading', background='#848484', foreground='white')
-
-        # vertical scrollbar
-        table_scrolly = tk.Scrollbar(table_frame)
-        table_scrolly.pack(side="right", fill='y')
-        # horizontal scrollbar
-        table_scrollx = tk.Scrollbar(table_frame, orient='horizontal')
-        table_scrollx.pack(side="bottom", fill='x')
-
-        # use ttk Treeview to create table
-        table = ttk.Treeview(table_frame, yscrollcommand=table_scrolly.set, xscrollcommand=table_scrollx.set, columns=('id', 'name', 'description', 'did_you_know'), show='headings')
-
-        # configure the scroll bars with the table
-        table_scrolly.config(command=table.yview)
-        table_scrollx.config(command=table.xview)
-
-        # create the headers
-        table.heading('id', text='id', command=lambda: rowOrder('id', diff_dress_data, table))
-        table.heading('name', text='name', command=lambda: rowOrder('name', diff_dress_data, table))
-        table.heading('description', text='description', command=lambda: rowOrder('description', diff_dress_data, table))
-        table.heading('did_you_know', text='did_you_know', command=lambda: rowOrder('did_you_know', diff_dress_data, table))
-
-        # set column variables
-        table.column('id', width=75, stretch=False)
-        table.column('name', width=145, stretch=False)
-        table.column('description', width=1000, anchor='nw', stretch=False)
-        table.column('did_you_know', anchor='nw', stretch=False, width=800)
-        
-        # pack table into table_frame
-        table.pack(fill='both', expand=True)
-
-        # fill table with difference report data
-        for index, data in enumerate(diff_dress_data):
-            # word wrap text
-            for i, cell in enumerate(data): 
-                if len(str(data[i])) > 2500:
-                    data[i] = wrap(str(cell), 400)
-                else:
-                    data[i] = wrap(str(cell), 250)
-
-            # if even row, set tag to evenrow
-            # if odd row, set tag to oddrow
-            if changed_or_new[index] == 'new':
-                table.insert(parent='', index=tk.END, values=data, tags=('new',))
-            elif changed_or_new[index] == 'changed':
-                table.insert(parent='', index=tk.END, values=data, tags=('changed',))
-
-        # alternate colors each line
-        table.tag_configure('new', background='#BAFFA4')
-        table.tag_configure('changed', background='#FFA5A4')
-
-        # monitor select event on items
-        table.bind('<<TreeviewSelect>>', item_select)
-
-        column_headers = ['id', 'name', 'description', 'did_you_know'] # column headers
-
-        # create button frame and place one table_window
-        btn_frame = tk.Frame(table_window)
-        btn_frame.pack(side='bottom', pady=15)
-        # create buttons and pack on button_frame
-        btn = tk.Button(btn_frame, text='Export SQL File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportSQL(diff_dress_data, changed_or_new))
-        btn.pack(side='left', padx=25)
-
-        btn = tk.Button(btn_frame, text='Export to HTML', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportHTML(diff_dress_data, column_headers, 'difference_report'))
-        btn.pack(side='left', padx=25)
-
-        btn2 = tk.Button(btn_frame, text='Export Excel File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportExcel(diff_dress_data, column_headers, 'difference_report'))
-        btn2.pack(side='left', padx=25)
+        column_headers = ['id', 'name', 'description', 'did_you_know', 'changed_or_new']
+        generate_table(diff_dress_data, 'difference_report', column_headers, 150, 800, 'nw')
 
     except FileNotFoundError:
         tk.messagebox.showerror(title="Error in diffReport", message=f"File '{file_path}' not found.")
@@ -1073,32 +1014,8 @@ def googleImage():
     header_row = ["ID", "Name", "URL1", "URL2", "URL3"]
     sheet.append(header_row)
 
-    # progress bar window for creating excel file
-    excel_progress_window = tk.Toplevel(root)
-    excel_progress_window.title('Creating Excel File')
-    sw = int(excel_progress_window.winfo_screenwidth()/2 - 450/2)
-    sh = int(excel_progress_window.winfo_screenheight()/2 - 70/2)
-    excel_progress_window.geometry(f'450x70+{sw}+{sh}')
-    excel_progress_window.resizable(False, False)
-    excel_progress_window.attributes('-disable', True)
-    excel_progress_window.focus()
-
-    # progress bar custom style
-    pb_style = ttk.Style()
-    pb_style.theme_use('clam')
-    pb_style.configure('green.Horizontal.TProgressbar', foreground='#1ec000', background='#1ec000')
-
-    # frame to hold progress bar
-    pb_frame = tk.Frame(excel_progress_window)
-    pb_frame.pack()
-
-    # progress bar
-    pb = ttk.Progressbar(pb_frame, length=400, style='green.Horizontal.TProgressbar', mode='determinate', maximum=100, value=0)
-    pb.pack(pady=10)
-
-    # label for percent complete
-    percent_label = tk.Label(pb_frame, text='Creating Excel File...0%')
-    percent_label.pack()
+    # create progress bar
+    progress_window, pb, percent_label = progress_bar('Creating Excel File')
     complete = 0
 
     url_list = []
@@ -1152,36 +1069,12 @@ def googleImage():
         pb['value'] = (complete/len(api_dress_data))*100 # calculate percentage of data retrieved
         percent_label.config(text=f'Creating Excel File...{int(pb["value"])}%') # update completion percent label
 
-    excel_progress_window.destroy() # close progress bar window
+    progress_window.destroy() # close progress bar window
     workbook.save(file_name)
 
     if download_google_imgs.get() == 1: 
-        # progress bar window for downloading google image
-        google_image_progress_window = tk.Toplevel(root)
-        google_image_progress_window.title('Downloading Images')
-        sw = int(google_image_progress_window.winfo_screenwidth()/2 - 450/2)
-        sh = int(google_image_progress_window.winfo_screenheight()/2 - 70/2)
-        google_image_progress_window.geometry(f'450x70+{sw}+{sh}')
-        google_image_progress_window.resizable(False, False)
-        google_image_progress_window.attributes('-disable', True)
-        google_image_progress_window.focus()
-
-        # progress bar custom style
-        pb_style = ttk.Style()
-        pb_style.theme_use('clam')
-        pb_style.configure('green.Horizontal.TProgressbar', foreground='#1ec000', background='#1ec000')
-
-        # frame to hold progress bar
-        pb_frame = tk.Frame(google_image_progress_window)
-        pb_frame.pack()
-
-        # progress bar
-        pb = ttk.Progressbar(pb_frame, length=400, style='green.Horizontal.TProgressbar', mode='determinate', maximum=100, value=0)
-        pb.pack(pady=10)
-
-        # label for percent complete
-        percent_label = tk.Label(pb_frame, text='Downloading Images...0%')
-        percent_label.pack()
+        # create progress bar
+        progress_window, pb, percent_label = progress_bar('Downloading Images')
         
         threads= [] # working threads
 
@@ -1196,7 +1089,7 @@ def googleImage():
                 pb['value'] = (complete/len(url_list))*100 # calculate percentage of images downloaded
                 percent_label.config(text=f'Downloading Images...{int(pb["value"])}%') # update completion percent label
     
-        google_image_progress_window.destroy() # close progress bar window
+        progress_window.destroy() # close progress bar window
 
     openFile(file_name)
     google_image_search_button.config(state='normal')
@@ -1205,11 +1098,6 @@ def googleImage():
 Performs word analysis on given dress IDs
 '''
 def wordAnalysis():
-    # helper for table item selection
-    def item_select(_):
-        for item in table.selection():
-            print(table.item(item)['values'])
-
     word_analysis_data = [] # data from word analysis
     api_dress_data = sorted(apiRunner(), key=lambda x : x['id']) # gets dress data from API and sorts by ID
 
@@ -1240,102 +1128,47 @@ def wordAnalysis():
                                        len(str(dress_data['did_you_know']).strip(string.punctuation).split()), str(noun_count), str(adjective_count),
                                        str(ease), str(kincaid), str(readability)])
 
-        # create window to display table
-        table_window = tk.Toplevel(root)
-        table_window.title("Word Analysis")
-        table_window.geometry(f"1000x600")
-        table_window.minsize(1000,600)
-
-        # create frame to hold table
-        table_frame = tk.Frame(table_window)
-        table_frame.pack_propagate(False)
-        table_frame.place(x=0, y=0, relwidth=1, relheight=.89, anchor="nw")
-
-        # using style to set row height and heading colors
-        style = ttk.Style()
-        style.theme_use('clam')
-        style.configure('Treeview', rowheight=50)
-        style.configure('Treeview.Heading', background='#848484', foreground='white')
-
-        # vertical scrollbar
-        table_scrolly = tk.Scrollbar(table_frame)
-        table_scrolly.pack(side="right", fill='y')
-        # horizontal scrollbar
-        table_scrollx = tk.Scrollbar(table_frame, orient='horizontal')
-        table_scrollx.pack(side="bottom", fill='x')
-
-        # use ttk Treeview to create table
-        table = ttk.Treeview(table_frame, yscrollcommand=table_scrolly.set, xscrollcommand=table_scrollx.set,
-                            columns=('id', 'name', 'description_word_count', 'did_you_know_word_count', 'total_noun_count', 'total_adjective_count', 'reading_ease', 'kincaid_grade', 'readability_index'), show='headings')
-
-        # configure the scroll bars with the table
-        table_scrolly.config(command=table.yview)
-        table_scrollx.config(command=table.xview)
-
-        # create the headers
-        table.heading('id', text='id')
-        table.heading('name', text='name')
-        table.heading('description_word_count', text='description_word_count')
-        table.heading('did_you_know_word_count', text='did_you_know_word_count')
-        table.heading('total_noun_count', text='total_noun_count')
-        table.heading('total_adjective_count', text='total_adjective_count')
-        table.heading('reading_ease', text='reading_ease')
-        table.heading('kincaid_grade', text='kincaid_grade')
-        table.heading('readability_index', text='readability_index')
-
-        # set column variables
-        table.column('id', width=75, stretch=False)
-        table.column('name', width=145, stretch=False)
-        table.column('description_word_count', width=200, anchor='center', stretch=False)
-        table.column('did_you_know_word_count', width=200, anchor='center', stretch=False)
-        table.column('total_noun_count', width=200, anchor='center', stretch=False)
-        table.column('total_adjective_count', width=200, anchor='center', stretch=False)
-        table.column('reading_ease', width=200, anchor='center', stretch=False)
-        table.column('kincaid_grade', width=200, anchor='center', stretch=False)
-        table.column('readability_index', width=200, anchor='center', stretch=False)
-        
-        # pack table into table_frame
-        table.pack(fill='both', expand=True)
-
-        # fill table with difference report data
-        for index, data in enumerate(word_analysis_data):
-            # word wrap text
-            for i, cell in enumerate(data): 
-                data[i] = wrap(str(cell), 250)
-
-            # if even row, set tag to evenrow
-            # if odd row, set tag to oddrow
-            if index % 2 == 0:
-                table.insert(parent='', index=tk.END, values=data, tags=('evenrow',))
-            else:
-                table.insert(parent='', index=tk.END, values=data, tags=('oddrow',))
-
-        # alternate colors each line
-        table.tag_configure('evenrow', background='#e8f3ff')
-        table.tag_configure('oddrow', background='#f7f7f7')
-
-        # monitor select event on items
-        table.bind('<<TreeviewSelect>>', item_select)
-
-        # column headers
         column_headers = ['id', 'name', 'description_word_count', 'did_you_know_word_count', 'total_noun_count', 'total_adjective_count', 'reading_ease', 'kincaid_grade', 'readability_index']
-
-        # create button frame and place one table_window
-        btn_frame = tk.Frame(table_window)
-        btn_frame.pack(side='bottom', pady=15)
-
-        # create buttons and pack on button_frame
-        btn = tk.Button(btn_frame, text='Export to HTML', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportHTML(word_analysis_data, column_headers, 'word_analysis_report'))
-        btn.pack(side='left', padx=25)
-
-        btn2 = tk.Button(btn_frame, text='Export Excel File', font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: exportExcel(word_analysis_data, column_headers, 'word_analysis_report'))
-        btn2.pack(side='left', padx=25)
-
+        generate_table(word_analysis_data, 'word_analysis_report', column_headers, 50, 200, 'center', 1)
+        
     except Exception as e:
         tk.messagebox.showerror(title="Error in wordAnalysis", message=f'Error: {e}')
         print(f'Error: {e}')
     finally:
         word_analysis_button.config(state='normal')
+
+'''
+Generate Wiki Link
+'''
+def generateWikiLink():
+    # set user agent
+    USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+    wiki_wiki = wikipediaapi.Wikipedia("en",headers={"User-Agent": USER_AGENT})
+
+    # gather all dress data from api
+    wiki_link_data = sorted(apiRunner(), key=lambda x : x['id'])
+    wiki_data = []
+
+    progress_window, pb, percent_label = progress_bar('Retrieving Wiki Data')
+
+    for complete, item in enumerate(wiki_link_data):
+        try:
+            page = wiki_wiki.page(item["name"])
+            if page.exists():
+                item["wiki_page_link"] = page.fullurl
+                wiki_data.append([item['id'], item['name'],item['wiki_page_link']])
+
+                pb['value'] = (complete/len(wiki_link_data))*100 # calculate percentage of images downloaded
+                percent_label.config(text=f'Retrieving Wiki Data...{int(pb["value"])}%') # update completion percent label
+        except Exception as e:
+            print(f"Error retrieving Wikipedia data for {item['name']}: {e}")
+
+    progress_window.destroy()
+
+    column_headers = ['id', 'name', 'wiki_page_link']
+    generate_table(wiki_data, 'wiki_link_report', column_headers, 75, 800, 'nw')
+
+    wiki_link_gen_button.config(state='normal')
 
 '''
 Spins up new thread to run generateUpdate function
@@ -1368,6 +1201,14 @@ def startGoogleImageThread():
     google_image_search_button.config(state='disabled')
     google_image_search_thread = threading.Thread(target=googleImage)
     google_image_search_thread.start()
+
+'''
+Spins up new thread to run generateWikiLink function
+'''
+def startGenerateWikiLinkThread():
+    wiki_link_gen_button.config(state='disabled')
+    wiki_link_thread = threading.Thread(target=generateWikiLink)
+    wiki_link_thread.start()
 
 '''
 Launch help site when user clicks Help button
@@ -1407,6 +1248,11 @@ def raiseFrame(frame):
         text_field_label.tkraise()
         text_field.tkraise()
         root.title("Project ABCD Google Image")
+    elif frame == 'wiki_link_frame':
+        wiki_link_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
+        root.title("Project ABCD Wiki Link")
 
 
 #--------------------------------Main Frame-----------------------------------------------------------------------------------------------
@@ -1453,6 +1299,9 @@ main_button_frame2.place(relx=.5, rely=.7, anchor='center')
 ## Google Images: Create an Excel file with 3 image links to the selected dresses
 google_image_button = tk.Button(main_button_frame2, text="Google Image", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('google_image_frame'))
 google_image_button.pack(side="left", padx=50)
+
+wiki_link_button = tk.Button(main_button_frame2, text="Wiki Link", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('wiki_link_frame'))
+wiki_link_button.pack(side="left", padx=50)
 
 
 #--------------------------------Book Gen Frame---------------------------------------------------------------------------------------------
@@ -1780,6 +1629,25 @@ download_google_image_checkbutton.place(x=170, y=150)
 # place button frame on word analysis frame
 google_image_button_frame.pack(side="bottom", pady=10)
 
+#--------------------------------Wiki Link Frame-----------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------------------------------------------------------
+wiki_link_frame = tk.Frame(root, width=1000, height=600)
+wiki_link_frame.pack_propagate(False)
+wiki_link_frame.grid(row=0, column=0, sticky='news')
+ 
+#--------------------------------Wiki Link Buttons--------------------------------------------------------------------------------------
+# button frame
+wiki_link_gen_button_frame = tk.Frame(wiki_link_frame)
+
+wiki_link_gen_button = tk.Button(wiki_link_gen_button_frame, text="Generate", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startGenerateWikiLinkThread)
+wiki_link_back_button = tk.Button(wiki_link_gen_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+
+# pack buttons into button frame
+wiki_link_gen_button.pack(side="left", padx=35)
+wiki_link_back_button.pack(side="left", padx=30)
+
+# place button frame on word analysis frame
+wiki_link_gen_button_frame.pack(side="bottom", pady=10)
 
 # raise main_frame to start
 main_frame.tkraise()
