@@ -12,7 +12,6 @@ from pandas import Series, DataFrame
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from textblob import TextBlob
 import wikipediaapi
-
 # pip install googletrans
 # pip install googletrans==4.0.0-rc1
 import googletrans
