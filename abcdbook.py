@@ -13,6 +13,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from textblob import TextBlob
 from bs4 import BeautifulSoup
 import wikipediaapi
+from itertools import combinations
+from collections import defaultdict
 
 # pip install googletrans
 # pip install googletrans==4.0.0-rc1
@@ -1171,6 +1173,155 @@ def generateWikiLink():
     wiki_link_gen_button.config(state='normal')
 
 '''
+Generates an xcel file with the pairs found
+'''
+def generatePairs():
+    file_path = 'APIData.xlsx'  # Change to the actual file path
+    
+    # Assuming the data source is an Excel file and we have the API data ready
+    dress_ids = sorted(getSlideNumbers())  # Assuming getSlideNumbers() returns dress IDs
+    api_dress_data = sorted(apiRunner(), key=lambda x: x['id'])  # Assuming apiRunner() returns dress data
+
+    pairs = []
+
+    try:
+        # Read dress data from Excel file
+        sheet_dress_data = pd.read_excel(file_path)
+        sheet_dress_data.dropna(subset=['id'], inplace=True)  # Drop rows with missing IDs
+        sheet_dress_data['description'].fillna('', inplace=True)  # Remove NA/NAN from description column
+        sheet_dress_data['did_you_know'].fillna('', inplace=True)  # Remove NA/NAN from did_you_know column
+
+        # Iterate through API dress data
+        for api_data in api_dress_data:
+            # Get the index of the current API data ID
+            api_index = api_data['id'] - 1
+            
+            # Get the name of the current API data ID
+            name = api_data['name']
+
+            # Split the name into tokens and remove any prefixes
+            tokens = [token for token in name.split() if token not in ["Dr.", "Mr.", "Mrs.", "Ms."]]
+
+            # Loop through each token
+            for token in tokens:
+                # Loop through other IDs
+                for j in range(len(sheet_dress_data)):
+                    # Get the description and did you know text of the other ID
+                    description = sheet_dress_data.at[j, 'description']
+                    did_you_know = sheet_dress_data.at[j, 'did_you_know']
+                    
+                    # Check if the token is present in either of them
+                    if token in description or token in did_you_know:
+                        if (api_data['id'], sheet_dress_data.at[j, 'id']) not in [(pair[0], pair[2]) for pair in pairs]:
+                            # Add the pair of IDs and names to the list
+                            pairs.append([api_data['id'], name, sheet_dress_data.at[j, 'id'], sheet_dress_data.at[j, 'name']])
+                        # Break the inner loop as we found a pair for this token
+                        break
+
+        # Generate table and save to Excel
+        column_headers = ['ID1', 'Name 1', 'ID2', 'Name 2']
+        generate_table(pairs, 'generate_pairs', column_headers, 50, 200, 'center', 1)
+        df_pairs = pd.DataFrame(pairs, columns=column_headers)
+        df_pairs.to_excel("pairs_generated.xlsx", index=False)
+        print("Excel file 'pairs_generated.xlsx' created.")
+
+    except FileNotFoundError:
+        print(f"File '{file_path}' not found.")
+    except Exception as e:
+        print(f'Error: {e}')
+
+
+'''
+Function to fetch the english text from dress data
+'''
+def fetch_english_text(dress_data):
+    english_texts = {}  
+    for dress in dress_data:
+        dress_id = dress.get('id')
+        english_description = f"{dress.get('name', '')} {dress.get('description', '')} {dress.get('did_you_know', '')}" 
+        english_texts[dress_id] = english_description
+    return english_texts
+
+def translate_text_to_telugu(english_texts):
+    translator = googletrans.Translator()
+    telugu_texts = {}
+    
+    target_language = 'telugu'
+    
+    for id, text in english_texts.items():
+        # Attempt translation
+        try:
+            translated = translator.translate(text, dest=target_language)
+            translated_text = translated.text
+        except Exception as e:
+            print(f"Error translating text ID {id}: {e}")
+            translated_text = ""
+        
+        telugu_texts[id] = translated_text
+    
+    return telugu_texts
+"""
+    Create an HTML package with English and Telugu texts.
+    """
+def create_html_package(english_texts, telugu_texts):
+    html_content = "<html><body>"
+    for id, english_text in english_texts.items():
+        telugu_text = telugu_texts.get(id, '')
+        html_content += f"<div><h2>English Text for ID {id}</h2><p>{english_text}</p></div>"
+        html_content += f"<div><h2>Telugu Text for ID {id}</h2><p>{telugu_text}</p></div>"
+    html_content += "</body></html>"
+    return html_content
+"""
+    Save the HTML content to a file, appending an incrementing number to the filename
+    to avoid overwrites.
+    """
+def save_html_to_file(html_content, base_filename="translation_package"):
+   
+    html_filename = f"{base_filename}.html"
+    txt_filename = f"{base_filename}.txt"
+    counter = 1
+    # Check if the file exists and update the filename until it's unique
+    while os.path.exists(html_filename) or os.path.exists(txt_filename):
+       html_filename = f"{base_filename}_{counter}.html"
+       txt_filename = f"{base_filename}_{counter}.txt"
+       counter += 1
+       
+       
+    with open(html_filename, 'w', encoding='utf-8') as file:
+        file.write(html_content)
+        
+    text_content = html_content
+    with open(txt_filename, 'w', encoding='utf-8') as file:
+        file.write(text_content)
+
+    return html_filename, txt_filename
+
+def generate_translation_package():
+    # Get ID numbers from text area
+    dress_data = apiRunner()
+    
+    # Fetch English text
+    english_texts = fetch_english_text(dress_data)
+    
+
+    # Translate to Telugu
+    telugu_texts = translate_text_to_telugu(english_texts)
+    
+    # Create HTML package
+    html_content = create_html_package(english_texts, telugu_texts)
+  
+    
+     # Save HTML and TXT files
+    html_filename, txt_filename = save_html_to_file(html_content)  
+    
+    # Open the HTML file in a web browser
+    webbrowser.open(f'file://{os.path.realpath(html_filename)}')
+    
+    # Optionally, show a message that the file has been saved
+    print("Translation package has been generated and saved.")
+
+
+'''
 Spins up new thread to run generateUpdate function
 '''
 def startGenerateBookThread():
@@ -1209,6 +1360,22 @@ def startGenerateWikiLinkThread():
     wiki_link_gen_button.config(state='disabled')
     wiki_link_thread = threading.Thread(target=generateWikiLink)
     wiki_link_thread.start()
+
+'''
+Spins up new thread to run generatePairs function
+'''
+def startGeneratePairsThread():
+    who_are_my_pairs_gen_button.config(state='disabled')
+    who_are_my_pairs_thread = threading.Thread(target=generatePairs)
+    who_are_my_pairs_thread.start()
+
+'''
+Spins up new thread to run translatepackage function
+'''
+def startTranslationPackageThread():
+    translation_package_generate_button.config(state="disabled")
+    translate_package_thread = threading.Thread(target=generate_translation_package)
+    translate_package_thread.start()
 
 '''
 Launch help site when user clicks Help button
@@ -1253,6 +1420,16 @@ def raiseFrame(frame):
         text_field_label.tkraise()
         text_field.tkraise()
         root.title("Project ABCD Wiki Link")
+    elif frame == 'who_are_my_pairs_frame':
+        who_are_my_pairs_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
+        root.title("Project ABCD Who Are My Pairs")
+    elif frame == 'translation_package_frame':  
+        translation_package_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
+        root.title("Project ABCD Translation Package")
 
 
 #--------------------------------Main Frame-----------------------------------------------------------------------------------------------
@@ -1300,9 +1477,24 @@ main_button_frame2.place(relx=.5, rely=.7, anchor='center')
 google_image_button = tk.Button(main_button_frame2, text="Google Image", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('google_image_frame'))
 google_image_button.pack(side="left", padx=50)
 
+## Wiki Link: [FILL IN THE ACTION HERE]
 wiki_link_button = tk.Button(main_button_frame2, text="Wiki Link", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('wiki_link_frame'))
 wiki_link_button.pack(side="left", padx=50)
 
+## My Pairs: Shows pairs when they are searched
+who_are_my_pairs_button = tk.Button(main_button_frame2, text="Who Are My Pairs?", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('who_are_my_pairs_frame'))
+who_are_my_pairs_button.pack(side="left", padx=50)
+
+main_button_frame3 = tk.Frame(main_frame)
+main_button_frame3.place(relx=.5, rely=.9, anchor='center')
+
+## Generate Book: fetches English text from Api, uses google translate to generate "telugu" text, then creates HTML package with english text on page, and "telugu" text on another.
+translation_package_button = tk.Button(main_button_frame3, text="Translation Package", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('translation_package_frame'))
+translation_package_button.pack(side="left", padx=50)
+
+## First Person: fetches text from api, uses ChatGPT to reword the description and did you know text to first person
+first_person_button = tk.Button(main_button_frame3, text="First Person Conversion", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('translation_package_frame'))
+first_person_button.pack(side="left", padx=50)
 
 #--------------------------------Book Gen Frame---------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------------------------
@@ -1648,6 +1840,51 @@ wiki_link_back_button.pack(side="left", padx=30)
 
 # place button frame on word analysis frame
 wiki_link_gen_button_frame.pack(side="bottom", pady=10)
+
+#--------------------------------Who Are My Pairs Frame-----------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------------------------------------------------------
+who_are_my_pairs_frame = tk.Frame(root, width=1000, height=600)
+who_are_my_pairs_frame.pack_propagate(False)
+who_are_my_pairs_frame.grid(row=0, column=0, sticky='news')
+
+#--------------------------------Who Are My Pairs Buttons-----------------------------------------------------------------------------------
+#button frame
+who_are_my_pairs_gen_button_frame = tk.Frame(who_are_my_pairs_frame)
+
+who_are_my_pairs_gen_button = tk.Button(who_are_my_pairs_gen_button_frame, text="Generate Pairs", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startGeneratePairsThread)
+who_are_my_pairs_back_button = tk.Button(who_are_my_pairs_gen_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+
+# pack button into button frame
+who_are_my_pairs_gen_button.pack(side="left", padx=35)
+who_are_my_pairs_back_button.pack(side="left", padx=30)
+
+# place button frame on word analysis frame?
+who_are_my_pairs_gen_button_frame.pack(side="bottom", pady=10)
+
+#--------------------------------Translation Package Frame-----------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------------------------------------------------------
+translation_package_frame = tk.Frame(root, width=1000, height=600)
+translation_package_frame.pack_propagate(False)
+translation_package_frame.grid(row=0, column=0, sticky='news')
+
+#--------------------------------Translation Package Buttons-----------------------------------------------------------------------------------------------
+# generate button frame
+translation_package_button_frame = tk.Frame(translation_package_frame)
+# generate button
+translation_package_generate_button = tk.Button(translation_package_button_frame, text="Generate", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startTranslationPackageThread)
+# help button
+translation_package_help_button = tk.Button(translation_package_button_frame, text="Help", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=launchHelpSite)
+# upload button
+translation_package_back_button = tk.Button(translation_package_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+# pack buttons into button frame
+translation_package_generate_button.pack(side="left", padx=35)
+translation_package_help_button.pack(side="left")
+translation_package_back_button.pack(side="left", padx=30)
+
+# place button frame on word analysis frame
+translation_package_button_frame.pack(side="bottom", pady=10)
+
+#-------------------------------Start Main Frame----------------------------------------------------------------------------------------------
 
 # raise main_frame to start
 main_frame.tkraise()
