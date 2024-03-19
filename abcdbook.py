@@ -13,12 +13,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from textblob import TextBlob
 from bs4 import BeautifulSoup
 import wikipediaapi
-from itertools import combinations
-from collections import defaultdict
+import openai
 
 # pip install googletrans
 # pip install googletrans==4.0.0-rc1
 import googletrans
+
+openai.api_key = 'private'
 
 ROOT_WIDTH = 1000 # app window width
 ROOT_HEIGHT = 600 # app window height
@@ -1260,6 +1261,18 @@ def translate_text_to_telugu(english_texts):
         telugu_texts[id] = translated_text
     
     return telugu_texts
+
+def translate_text_to_first_person(english_texts):
+    first_person_texts = {}
+    for id, text in english_texts.items():
+        # Perform conversion from third person to first person using ChatGPT
+        first_person_text = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": f"Can you convert the following text from the third person to the first person?\n\n{text}\n\n"}]
+        )
+        first_person_texts[id] = first_person_text.choices[0].text.strip()
+    return first_person_texts
+
 """
     Create an HTML package with English and Telugu texts.
     """
@@ -1321,6 +1334,15 @@ def generate_translation_package():
     print("Translation package has been generated and saved.")
 
 
+def generate_first_person_package():
+    dress_data = apiRunner() 
+    english_texts = fetch_english_text(dress_data)
+    first_person_texts = translate_text_to_first_person(english_texts)
+    html_content = create_html_package(english_texts, first_person_texts)
+    html_filename, txt_filename = save_html_to_file(html_content)
+    webbrowser.open(f'file://{os.path.realpath(html_filename)}')
+    print("Translation package has been generated and saved.")
+
 '''
 Spins up new thread to run generateUpdate function
 '''
@@ -1378,6 +1400,14 @@ def startTranslationPackageThread():
     translate_package_thread.start()
 
 '''
+Spins up new thread to run translate_to_first person function
+'''
+def startFirstPersonThread():
+    first_person_generate_button.config(state="disabled")
+    first_person_thread = threading.Thread(target=generate_first_person_package)
+    first_person_thread.start()
+
+'''
 Launch help site when user clicks Help button
 '''
 def launchHelpSite():
@@ -1430,6 +1460,10 @@ def raiseFrame(frame):
         text_field_label.tkraise()
         text_field.tkraise()
         root.title("Project ABCD Translation Package")
+    elif frame == 'first_person_frame':
+        first_person_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
 
 
 #--------------------------------Main Frame-----------------------------------------------------------------------------------------------
@@ -1493,7 +1527,7 @@ translation_package_button = tk.Button(main_button_frame3, text="Translation Pac
 translation_package_button.pack(side="left", padx=50)
 
 ## First Person: fetches text from api, uses ChatGPT to reword the description and did you know text to first person
-first_person_button = tk.Button(main_button_frame3, text="First Person Conversion", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('translation_package_frame'))
+first_person_button = tk.Button(main_button_frame3, text="First Person Conversion", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('first_person_frame'))
 first_person_button.pack(side="left", padx=50)
 
 #--------------------------------Book Gen Frame---------------------------------------------------------------------------------------------
@@ -1883,6 +1917,24 @@ translation_package_back_button.pack(side="left", padx=30)
 
 # place button frame on word analysis frame
 translation_package_button_frame.pack(side="bottom", pady=10)
+
+#-------------------------------First Person Frame-------------------------------------------------------------------------------------------
+first_person_frame = tk.Frame(root, width=1000, height=600)
+first_person_frame.pack_propagate(False)
+first_person_frame.grid(row=0, column=0, sticky='news')
+
+#------------------------------------First Person Buttons-------------------------------------------------------------------------------------
+first_person_button_frame = tk.Frame(first_person_frame)
+
+first_person_generate_button = tk.Button(first_person_button_frame, text="Generate", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startFirstPersonThread)
+first_person_back_button = tk.Button(first_person_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+
+# pack buttons into button frame
+first_person_generate_button.pack(side="left", padx=35)
+first_person_back_button.pack(side="left", padx=30)
+
+# place button frame on <something>
+first_person_button_frame.pack(side="bottom", pady=10)
 
 #-------------------------------Start Main Frame----------------------------------------------------------------------------------------------
 
