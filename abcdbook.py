@@ -1194,28 +1194,27 @@ def generatePairs():
 
         # Iterate through API dress data
         for api_data in api_dress_data:
-            # Get the index of the current API data ID
-            api_index = api_data['id'] - 1
-            
             # Get the name of the current API data ID
             name = api_data['name']
-
             # Split the name into tokens and remove any prefixes
             tokens = [token for token in name.split() if token not in ["Dr.", "Mr.", "Mrs.", "Ms."]]
 
             # Loop through each token
             for token in tokens:
-                # Loop through other IDs
-                for j in range(len(sheet_dress_data)):
-                    # Get the description and did you know text of the other ID
+                # Loop through provided IDs instead of the entire sheet_dress_data
+                for provided_id in dress_ids:
+                    # Get the index of the provided ID in sheet_dress_data
+                    j = sheet_dress_data.index[sheet_dress_data['id'] == provided_id][0]
+                    # Get the description and did you know text of the provided ID
                     description = sheet_dress_data.at[j, 'description']
                     did_you_know = sheet_dress_data.at[j, 'did_you_know']
                     
                     # Check if the token is present in either of them
                     if token in description or token in did_you_know:
-                        if (api_data['id'], sheet_dress_data.at[j, 'id']) not in [(pair[0], pair[2]) for pair in pairs]:
+                        if (api_data['id'], provided_id) not in [(pair[0], pair[2]) for pair in pairs]:
                             # Add the pair of IDs and names to the list
-                            pairs.append([api_data['id'], name, sheet_dress_data.at[j, 'id'], sheet_dress_data.at[j, 'name']])
+                            if api_data['id'] != provided_id:
+                                pairs.append([api_data['id'], name, provided_id, sheet_dress_data.at[j, 'name']])
                         # Break the inner loop as we found a pair for this token
                         break
 
