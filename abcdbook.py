@@ -19,7 +19,7 @@ import openai
 # pip install googletrans==4.0.0-rc1
 import googletrans
 
-openai.api_key = 'private'
+openai.api_key = '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'
 
 ROOT_WIDTH = 1000 # app window width
 ROOT_HEIGHT = 600 # app window height
@@ -1385,6 +1385,8 @@ def generate_first_person_package():
     webbrowser.open(f'file://{os.path.realpath(html_filename)}')
     print("Translation package has been generated and saved.")
 
+def generate_word_search_package():
+    print("word puzzles have been generated")
 '''
 Spins up new thread to run generateUpdate function
 '''
@@ -1450,6 +1452,14 @@ def startFirstPersonThread():
     first_person_thread.start()
 
 '''
+Spins up new thread to run word search function
+'''
+def startWordPuzzleThread():
+    word_puzzle_generate_button.config(state="disabled")
+    word_search_thread = threading.Thread(target=generate_word_search_package)
+    word_search_thread.start()
+
+'''
 Launch help site when user clicks Help button
 '''
 def launchHelpSite():
@@ -1506,6 +1516,12 @@ def raiseFrame(frame):
         first_person_frame.tkraise()
         text_field_label.tkraise()
         text_field.tkraise()
+    elif frame == 'word_puzzle_frame':
+        word_puzzle_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
+        root.title("Project ABCD Word Search Puzzles")
+        
 
 
 #--------------------------------Main Frame-----------------------------------------------------------------------------------------------
@@ -1572,6 +1588,9 @@ translation_package_button.pack(side="left", padx=50)
 first_person_button = tk.Button(main_button_frame3, text="First Person Conversion", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('first_person_frame'))
 first_person_button.pack(side="left", padx=50)
 
+## Word Puzzle: generates and creates crossword puzzles based of words in character descriptions
+word_puzzle_button = tk.Button(main_button_frame3, text="Word Puzzle Creator", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('word_puzzle_frame'))
+word_puzzle_button.pack(side="left", padx=50)
 #--------------------------------Book Gen Frame---------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------------------------
 # book gen frame
@@ -1977,11 +1996,29 @@ first_person_back_button.pack(side="left", padx=30)
 
 # place button frame on <something>
 first_person_button_frame.pack(side="bottom", pady=10)
+#-------------------------------Word Search Frame-------------------------------------------------------------------------------------------
+word_puzzle_frame = tk.Frame(root, width=1000, height=600)
+word_puzzle_frame.pack_propagate(False)
+word_puzzle_frame.grid(row=0, column=0, sticky='news')
+
+#------------------------------------Word Search Buttons-------------------------------------------------------------------------------------
+word_puzzle_button_frame = tk.Frame(word_puzzle_frame)
+
+word_puzzle_generate_button = tk.Button(word_puzzle_button_frame, text="Generate", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startWordPuzzleThread)
+word_puzzle_back_button = tk.Button(word_puzzle_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+
+# pack buttons into button frame
+word_puzzle_generate_button.pack(side="left", padx=35)
+word_puzzle_back_button.pack(side="left", padx=30)
+
+# place button frame on <something>
+word_puzzle_button_frame.pack(side="bottom", pady=10)
 
 #-------------------------------Start Main Frame----------------------------------------------------------------------------------------------
 
 # raise main_frame to start
 main_frame.tkraise()
+
 
 # main gui loop
 root.mainloop()
