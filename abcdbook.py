@@ -1195,7 +1195,6 @@ def generatePairs():
         for api_data in api_dress_data:
             # Get the name of the current API data ID
             name = api_data['name']
-
             # Split the name into tokens and remove any prefixes
             tokens = [token for token in name.split() if token not in ["Dr.", "Mr.", "Mrs.", "Ms."]]
 
@@ -1211,10 +1210,9 @@ def generatePairs():
                     
                     # Check if the token is present in either of them
                     if token in description or token in did_you_know:
-                        if (api_data['id'], provided_id) not in [(pair[0], pair[2]) for pair in pairs]:
-
+                        if (api_data['id'], sheet_dress_data.at[j, 'id']) not in [(pair[0], pair[2]) for pair in pairs]:
                             # Add the pair of IDs and names to the list
-                            pairs.append([api_data['id'], name, provided_id, sheet_dress_data.at[j, 'name']])
+                            pairs.append([api_data['id'], name, sheet_dress_data.at[j, 'id'], sheet_dress_data.at[j, 'name']])
                         # Break the inner loop as we found a pair for this token
                         break
 
