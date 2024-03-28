@@ -1178,7 +1178,6 @@ Generates an xcel file with the pairs found
 '''
 def generatePairs():
     file_path = 'APIData.xlsx'  # Change to the actual file path
-    
     # Assuming the data source is an Excel file and we have the API data ready
     dress_ids = sorted(getSlideNumbers())  # Assuming getSlideNumbers() returns dress IDs
     api_dress_data = sorted(apiRunner(), key=lambda x: x['id'])  # Assuming apiRunner() returns dress data
@@ -1187,16 +1186,13 @@ def generatePairs():
 
     try:
         # Read dress data from Excel file
-        sheet_dress_data = pd.read_excel(file_path)
+        sheet_dress_data = pd.read_excel(file_path)      
         sheet_dress_data.dropna(subset=['id'], inplace=True)  # Drop rows with missing IDs
         sheet_dress_data['description'].fillna('', inplace=True)  # Remove NA/NAN from description column
         sheet_dress_data['did_you_know'].fillna('', inplace=True)  # Remove NA/NAN from did_you_know column
 
         # Iterate through API dress data
         for api_data in api_dress_data:
-            # Get the index of the current API data ID
-            api_index = api_data['id'] - 1
-            
             # Get the name of the current API data ID
             name = api_data['name']
 
@@ -1205,17 +1201,20 @@ def generatePairs():
 
             # Loop through each token
             for token in tokens:
-                # Loop through other IDs
-                for j in range(len(sheet_dress_data)):
-                    # Get the description and did you know text of the other ID
+                # Loop through provided IDs instead of the entire sheet_dress_data
+                for provided_id in dress_ids:
+                    # Get the index of the provided ID in sheet_dress_data
+                    j = sheet_dress_data.index[sheet_dress_data['id'] == provided_id][0]
+                    # Get the description and did you know text of the provided ID
                     description = sheet_dress_data.at[j, 'description']
                     did_you_know = sheet_dress_data.at[j, 'did_you_know']
                     
                     # Check if the token is present in either of them
                     if token in description or token in did_you_know:
-                        if (api_data['id'], sheet_dress_data.at[j, 'id']) not in [(pair[0], pair[2]) for pair in pairs]:
+                        if (api_data['id'], provided_id) not in [(pair[0], pair[2]) for pair in pairs]:
+
                             # Add the pair of IDs and names to the list
-                            pairs.append([api_data['id'], name, sheet_dress_data.at[j, 'id'], sheet_dress_data.at[j, 'name']])
+                            pairs.append([api_data['id'], name, provided_id, sheet_dress_data.at[j, 'name']])
                         # Break the inner loop as we found a pair for this token
                         break
 
@@ -1266,14 +1265,28 @@ def translate_text_to_telugu(english_texts):
     return telugu_texts
 
 def translate_text_to_first_person(english_texts):
-    first_person_texts = {}
-    for id, text in english_texts.items():
-        # Perform conversion from third person to first person using ChatGPT
-        first_person_text = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": f"Can you convert the following text from the third person to the first person?\n\n{text}\n\n"}]
-        )
-        first_person_texts[id] = first_person_text.choices[0].text.strip()
+    first_person_texts = {} # Dictionary to hold the translated text
+    messages = [{"role": "system", "content": 
+                 "You translate text from third person to first person. Don't reply with anything. Just do the work."}]
+
+
+    for id, texts in english_texts.items():
+        first_person_texts[id] = {}
+        for key, text in texts.items():
+
+            # Perform conversion from third person to first person using ChatGPT
+            messages.append(
+                    {"role": "user", "content": f"Convert the following text from the third person to the first person?\n\n{text}\n\n"}
+                    )
+            chat = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=messages
+            )
+            reply = chat.choices[0].message.content
+            first_person_texts[id][key] = reply
+            print(f"This is the Reply: {reply}\n\n")
+            print(first_person_texts)
+            #first_person_texts[id] = first_person_text.choices[0].text.strip()
     return first_person_texts
 
 """
@@ -1318,6 +1331,47 @@ def create_html_package(english_texts, telugu_texts):
     html_content += "</body></html>"
     return html_content
 
+def create_html_package_gpt(english_texts, first_person_texts):
+    page = 1
+    html_content = """
+    <html>
+    <head>
+    <style>
+        .name { font-weight: bold; text-align: center; }
+        .did_you_know { margin-top: 20px; font-size: 18px; }
+        .page {
+            page-break-after: always;
+        }
+        @media screen {
+            .page {
+                border-bottom: 1px solid #ccc;
+                padding-bottom: 20px;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+    </head>
+    <body>
+    """
+    for id, english_text in english_texts.items():
+        first_person_text = first_person_texts.get(id, {'name': '', 'description': '', 'did_you_know': ''})
+        html_content += f"<div class='page'><h2>Page No: {page} ABCD-id: {id} (English)</h2>"
+        html_content += f"<div class='name'>{english_text['name']}</div>"
+        html_content += f"<div class='description>'>Description</div>"
+        html_content += f"<p>{english_text['description']}</p>"
+        html_content += "<div class='did_you_know'>Did you know?</div>"
+        html_content += f"<p>{english_text['did_you_know']}</p></div><hr>"
+        
+        html_content += f"<div class='page'><h2>Page No: {page} ABCD-id: {id} (ChatGPT)</h2>"
+        html_content += f"<div class='name'>{english_text['name']}</div>"
+        html_content += f"<div class='description>'>Description</div>"
+        html_content += f"<p>{first_person_text['description']}</p>"
+        html_content += "<div class='did_you_know'>Did you know?</div>"
+        html_content += f"<p>{first_person_text['did_you_know']}</p></div><hr>"
+        page += 1
+    html_content += "</body></html>"
+    return html_content
+
 """
     Save the HTML content to a file, appending an incrementing number to the filename
     to avoid overwrites.
@@ -1351,40 +1405,88 @@ def save_html_to_file(english_texts, telugu_texts, base_filename="translation_pa
 
     return html_filename, txt_filename
 
+def save_html_to_file_gpt(english_texts, first_person_texts, base_filename="gpt_adjusted_package"):
+    html_filename = f"{base_filename}.html"
+    txt_filename = f"{base_filename}.txt"
+    counter = 1
+    # Check if the file exists and update the filename until it's unique
+    while os.path.exists(html_filename) or os.path.exists(txt_filename):
+        html_filename = f"{base_filename}_{counter}.html"
+        txt_filename = f"{base_filename}_{counter}.txt"
+        counter += 1
+    
+    # Saving HTML content
+    with open(html_filename, 'w', encoding='utf-8') as file:
+        file.write(create_html_package_gpt(english_texts, first_person_texts))  # Assuming create_html_package is defined as before
+    
+    # Creating a plain text version of the content
+    text_content = ""
+    for id, english_text in english_texts.items():
+        telugu_text = first_person_texts.get(id, '')
+        text_content += f"English Text for ID {id}\n{english_text}\n\n"
+        text_content += "------------------------------------------------\n\n"
+        text_content += f"ChatGPT Text for ID {id}\n{telugu_text}\n\n"
+        text_content += "================================================\n\n"
+    
+    # Saving text content
+    with open(txt_filename, 'w', encoding='utf-8') as file:
+        file.write(text_content)
+
+    return html_filename, txt_filename
+
 def generate_translation_package():
     # Get ID numbers from text area
-    dress_data = apiRunner()
-    
-    # Fetch English text
-    english_texts = fetch_english_text(dress_data)
-    
+    try:
 
-    # Translate to Telugu
-    telugu_texts = translate_text_to_telugu(english_texts)
+        dress_data = apiRunner()
+        
+        # Fetch English text
+        english_texts = fetch_english_text(dress_data)
+        
+
+        # Translate to Telugu
+        telugu_texts = translate_text_to_telugu(english_texts)
+        
+        # Create HTML package
+        html_content = create_html_package(english_texts, telugu_texts)
     
-    # Create HTML package
-    html_content = create_html_package(english_texts, telugu_texts)
-  
+        
+        # Save HTML and TXT files
+        html_filename, txt_filename = save_html_to_file(english_texts, telugu_texts)
     
-     # Save HTML and TXT files
-    html_filename, txt_filename = save_html_to_file(english_texts, telugu_texts)
-  
+        
+        # Open the HTML file in a web browser
+        webbrowser.open(f'file://{os.path.realpath(html_filename)}')
     
-    # Open the HTML file in a web browser
-    webbrowser.open(f'file://{os.path.realpath(html_filename)}')
-    
-    # Optionally, show a message that the file has been saved
-    print("Translation package has been generated and saved.")
+    except FileNotFoundError:
+        print(f"File '{e}' not found.")
+    except Exception as e:
+        print(f'Error: {e}')
+    finally:
+        translation_package_generate_button.config(state='normal')
+        
+        # Optionally, show a message that the file has been saved
+        print("Translation package has been generated and saved.")
+
 
 
 def generate_first_person_package():
-    dress_data = apiRunner() 
-    english_texts = fetch_english_text(dress_data)
-    first_person_texts = translate_text_to_first_person(english_texts)
-    html_content = create_html_package(english_texts, first_person_texts)
-    html_filename, txt_filename = save_html_to_file(html_content)
-    webbrowser.open(f'file://{os.path.realpath(html_filename)}')
+    try:
+
+        dress_data = apiRunner() 
+        english_texts = fetch_english_text(dress_data)
+        first_person_texts = translate_text_to_first_person(english_texts)
+        html_content = create_html_package_gpt(english_texts, first_person_texts)
+        html_filename, txt_filename = save_html_to_file_gpt(english_texts, first_person_texts)
+        webbrowser.open(f'file://{os.path.realpath(html_filename)}')
+    except FileNotFoundError:
+        print(f"File '{e}' not found")
+    except Exception as e:
+        print(f'Erro: {e}')
+    finally:
+        first_person_generate_button.config(state='normal')
     print("Translation package has been generated and saved.")
+
 
 '''
 Spins up new thread to run generateUpdate function
