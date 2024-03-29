@@ -1178,10 +1178,7 @@ Generates an xcel file with the pairs found
 '''
 def generatePairs():
     file_path = 'APIData.xlsx'  # Change to the actual file path
-    # Assuming the data source is an Excel file and we have the API data ready
-    dress_ids = sorted(getSlideNumbers())  # Assuming getSlideNumbers() returns dress IDs
     api_dress_data = sorted(apiRunner(), key=lambda x: x['id'])  # Assuming apiRunner() returns dress data
-
     pairs = []
 
     try:
@@ -1191,30 +1188,29 @@ def generatePairs():
         sheet_dress_data['description'].fillna('', inplace=True)  # Remove NA/NAN from description column
         sheet_dress_data['did_you_know'].fillna('', inplace=True)  # Remove NA/NAN from did_you_know column
 
-        # Iterate through API dress data
-        for api_data in api_dress_data:
+	# Iterate through API dress data
+        for data_that_will_be_searched in api_dress_data:
             # Get the name of the current API data ID
-            name = api_data['name']
+            name = data_that_will_be_searched['name']
             # Split the name into tokens and remove any prefixes
-            tokens = [token for token in name.split() if token not in ["Dr.", "Mr.", "Mrs.", "Ms."]]
+            tokens = [token + " " for token in name.split() if token not in ["Dr.", "Mr.", "Mrs.", "Ms."]]
 
             # Loop through each token
             for token in tokens:
                 # Loop through provided IDs instead of the entire sheet_dress_data
-                for provided_id in dress_ids:
-                    # Get the index of the provided ID in sheet_dress_data
-                    j = sheet_dress_data.index[sheet_dress_data['id'] == provided_id][0]
+                for data_that_contains_token in api_dress_data:
                     # Get the description and did you know text of the provided ID
-                    description = sheet_dress_data.at[j, 'description']
-                    did_you_know = sheet_dress_data.at[j, 'did_you_know']
-                    
-                    # Check if the token is present in either of them
-                    if token in description or token in did_you_know:
-                        if (api_data['id'], sheet_dress_data.at[j, 'id']) not in [(pair[0], pair[2]) for pair in pairs]:
-                            # Add the pair of IDs and names to the list
-                            pairs.append([api_data['id'], name, sheet_dress_data.at[j, 'id'], sheet_dress_data.at[j, 'name']])
-                        # Break the inner loop as we found a pair for this token
-                        break
+                    description = data_that_contains_token['description']
+                    did_you_know = data_that_contains_token['did_you_know']
+
+                    # Check if the token is present in either of them, make sure we aren't looking on the same IDs
+                    if data_that_will_be_searched['id'] != data_that_contains_token['id']:
+                        if token in description or token in did_you_know:
+                            if (data_that_contains_token['id'], data_that_will_be_searched['id']) not in [(pair[0], pair[2]) for pair in pairs]:
+                                # Add the pair of IDs and names to the list
+                                pairs.append([data_that_contains_token['id'], data_that_contains_token['name'], data_that_will_be_searched['id'], name])
+                            # Break the inner loop as we found a pair for this token
+                            break
 
         # Generate table and save to Excel
         column_headers = ['ID1', 'Name 1', 'ID2', 'Name 2']
@@ -1227,7 +1223,6 @@ def generatePairs():
         print(f"File '{file_path}' not found.")
     except Exception as e:
         print(f'Error: {e}')
-
 
 '''
 Function to fetch the english text from dress data
