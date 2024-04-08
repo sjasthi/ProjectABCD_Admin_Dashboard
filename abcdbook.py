@@ -14,12 +14,13 @@ from textblob import TextBlob
 from bs4 import BeautifulSoup
 import wikipediaapi
 import openai
+import traceback
 
 # pip install googletrans
 # pip install googletrans==4.0.0-rc1
 import googletrans
 
-openai.api_key = 'private'
+openai.api_key = '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'
 
 ROOT_WIDTH = 1000 # app window width
 ROOT_HEIGHT = 600 # app window height
@@ -1228,7 +1229,7 @@ def generatePairs():
 Function to fetch the english text from dress data
 '''
 def fetch_english_text(dress_data):
-    english_texts = {}  
+    english_texts = {}
     for dress in dress_data:
         dress_id = dress.get('id')
         english_description = {
@@ -1257,29 +1258,104 @@ def translate_text_to_telugu(english_texts):
 
     return telugu_texts
 
+
+def read_translated_ids(filename):
+    translated_ids = set()
+    if os.path.exists(filename):
+        with open(filename, 'r') as file:
+            for line in file:
+                translated_ids.add(line.strip())
+    return translated_ids
+
+def write_translated_ids(translated_ids, filename):
+    with open(filename, 'w') as file:
+        for id in translated_ids:
+            file.write(f"{id}\n")
+
+'''
+Performs change of third person text to first person
+'''
 def translate_text_to_first_person(english_texts):
+    i = 1
+    tries = 0
+    sleep_timer = 0
     first_person_texts = {} # Dictionary to hold the translated text
+    translated_ids_file = 'translated_ids.txt'
+    translated_ids = read_translated_ids(translated_ids_file)
+    print(translated_ids)
+
+
+    with open("output.txt", "a") as file: # Opens a text file to append the translated text
+        pass
+
     messages = [{"role": "system", "content": 
-                 "You translate text from third person to first person. Don't reply with anything. Just do the work."}]
+                 "You translate text from third person to first person."}]
 
 
     for id, texts in english_texts.items():
+        if str(id) in translated_ids:
+            print(f"ID: {id} was found to be translated already.\n\n", flush=True)
+            continue
         first_person_texts[id] = {}
+        
         for key, text in texts.items():
+            if key in ("description", "did_you_know"):
+                try_count = 0
+                while try_count < 3:
+                    try:
 
-            # Perform conversion from third person to first person using ChatGPT
-            messages.append(
-                    {"role": "user", "content": f"Convert the following text from the third person to the first person?\n\n{text}\n\n"}
-                    )
-            chat = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=messages
-            )
-            reply = chat.choices[0].message.content
-            first_person_texts[id][key] = reply
-            print(f"This is the Reply: {reply}\n\n")
-            print(first_person_texts)
-            #first_person_texts[id] = first_person_text.choices[0].text.strip()
+                        # Perform conversion from third person to first person using ChatGPT
+                        messages.append(
+                                {"role": "user", "content": f"Convert the following text to first person:\n\n{text}\n\n"}
+                                )
+                        chat = openai.ChatCompletion.create(
+                            model="gpt-3.5-turbo",
+                            messages=messages
+                        )
+                        reply = chat.choices[0].message.content
+                        first_person_texts[id][key] = reply
+
+                        print(f"The ID: {id}\nThe KEY: {key}\nThe TEXT: {text}\nThe REPLY: {reply}\nTries: {tries}\n\n", flush=True)
+                        tries += 1
+                        if tries > 60:
+                            #time.sleep(60)
+                            #sleep_timer = 0
+                            print("\n\nSLEEPING FOR 60 SECONDS\n\n", flush=True)
+                            break
+                        break
+                    except Exception as e:
+                        sleep_timer += 5
+                        time.sleep(sleep_timer)
+                        print("\n\nError Occurred: \n", e, flush=True)
+                        print(f"ID: {id}, Key: {key}, Text: {text}\n", flush=True)
+                        try_count += 1
+                        if try_count == 3:
+                            print("REACHED", flush=True)
+                        else:
+                            print("Retrying...", flush=True)
+
+                    #first_person_texts[id] = first_person_text.choices[0].text.strip()
+            else:
+                first_person_texts[id][key] = text
+
+        with open("output.txt", "a") as file:
+            file.write(f"Original text from ID: {id}\n")
+            file.write(f"Description:\n{english_texts[id]['description']}\n")
+            file.write(f"Did You Know:\n{english_texts[id]['did_you_know']}\n\n")
+            file.write(f"First-person text from ID: {id}\n")
+            file.write(f"Description:\n{first_person_texts[id]['description']}\n")
+            file.write(f"Did You Know:\n{first_person_texts[id]['did_you_know']}\n")
+            file.write("======================================================================================\n")
+
+        translated_ids.add(id)
+        write_translated_ids(translated_ids, translated_ids_file)
+        print(f"======================\nCharacter {i} Translated\n======================\n", flush=True)
+        i+= 1
+        print(f"Sleeper Timer at: {sleep_timer}", flush=True)
+        print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++", flush=True)
+        if tries > 60:
+            break
+    print("\n\nDONE WITH EVERYTHING\n\n", flush=True)
     return first_person_texts
 
 """
@@ -1475,7 +1551,7 @@ def generate_first_person_package():
     except FileNotFoundError:
         print(f"File '{e}' not found")
     except Exception as e:
-        print(f'Erro: {e}')
+        print(f'Error: {e}')
     finally:
         first_person_generate_button.config(state='normal')
     print("Translation package has been generated and saved.")
