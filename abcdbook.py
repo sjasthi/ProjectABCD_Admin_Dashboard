@@ -1,4 +1,6 @@
+import random
 import sys, io, requests, threading, webbrowser, urllib, os, platform, openpyxl, string, textwrap, re, time, textstat
+from xml.dom.expatbuilder import FragmentBuilderNS
 import tkinter as tk
 from tkinter import ttk, messagebox
 from pptx import Presentation
@@ -1178,10 +1180,7 @@ Generates an xcel file with the pairs found
 '''
 def generatePairs():
     file_path = 'APIData.xlsx'  # Change to the actual file path
-    # Assuming the data source is an Excel file and we have the API data ready
-    dress_ids = sorted(getSlideNumbers())  # Assuming getSlideNumbers() returns dress IDs
     api_dress_data = sorted(apiRunner(), key=lambda x: x['id'])  # Assuming apiRunner() returns dress data
-
     pairs = []
 
     try:
@@ -1191,30 +1190,29 @@ def generatePairs():
         sheet_dress_data['description'].fillna('', inplace=True)  # Remove NA/NAN from description column
         sheet_dress_data['did_you_know'].fillna('', inplace=True)  # Remove NA/NAN from did_you_know column
 
-        # Iterate through API dress data
-        for api_data in api_dress_data:
+	# Iterate through API dress data
+        for data_that_will_be_searched in api_dress_data:
             # Get the name of the current API data ID
-            name = api_data['name']
+            name = data_that_will_be_searched['name']
             # Split the name into tokens and remove any prefixes
-            tokens = [token for token in name.split() if token not in ["Dr.", "Mr.", "Mrs.", "Ms."]]
+            tokens = [token + " " for token in name.split() if token not in ["Dr.", "Mr.", "Mrs.", "Ms."]]
 
             # Loop through each token
             for token in tokens:
                 # Loop through provided IDs instead of the entire sheet_dress_data
-                for provided_id in dress_ids:
-                    # Get the index of the provided ID in sheet_dress_data
-                    j = sheet_dress_data.index[sheet_dress_data['id'] == provided_id][0]
+                for data_that_contains_token in api_dress_data:
                     # Get the description and did you know text of the provided ID
-                    description = sheet_dress_data.at[j, 'description']
-                    did_you_know = sheet_dress_data.at[j, 'did_you_know']
-                    
-                    # Check if the token is present in either of them
-                    if token in description or token in did_you_know:
-                        if (api_data['id'], sheet_dress_data.at[j, 'id']) not in [(pair[0], pair[2]) for pair in pairs]:
-                            # Add the pair of IDs and names to the list
-                            pairs.append([api_data['id'], name, sheet_dress_data.at[j, 'id'], sheet_dress_data.at[j, 'name']])
-                        # Break the inner loop as we found a pair for this token
-                        break
+                    description = data_that_contains_token['description']
+                    did_you_know = data_that_contains_token['did_you_know']
+
+                    # Check if the token is present in either of them, make sure we aren't looking on the same IDs
+                    if data_that_will_be_searched['id'] != data_that_contains_token['id']:
+                        if token in description or token in did_you_know:
+                            if (data_that_contains_token['id'], data_that_will_be_searched['id']) not in [(pair[0], pair[2]) for pair in pairs]:
+                                # Add the pair of IDs and names to the list
+                                pairs.append([data_that_contains_token['id'], data_that_contains_token['name'], data_that_will_be_searched['id'], name])
+                            # Break the inner loop as we found a pair for this token
+                            break
 
         # Generate table and save to Excel
         column_headers = ['ID1', 'Name 1', 'ID2', 'Name 2']
@@ -1227,7 +1225,6 @@ def generatePairs():
         print(f"File '{file_path}' not found.")
     except Exception as e:
         print(f'Error: {e}')
-
 
 '''
 Function to fetch the english text from dress data
@@ -1485,8 +1482,325 @@ def generate_first_person_package():
         first_person_generate_button.config(state='normal')
     print("Translation package has been generated and saved.")
 
+def generate_first_person_package():
+    dress_data = apiRunner() 
+    english_texts = fetch_english_text(dress_data)
+    first_person_texts = translate_text_to_first_person(english_texts)
+    html_content = create_html_package(english_texts, first_person_texts)
+    html_filename, txt_filename = save_html_to_file(html_content)
+    webbrowser.open(f'file://{os.path.realpath(html_filename)}')
+    print("Translation package has been generated and saved.")
+
+def wordSearchOpenAi(english_texts):
+    words_for_puzzles = {}
+   
+    messages = [
+        {"role": "system", "content": "You will extract ten meaningful words significant to the character's text. Do not reply with anything else. Just list the words."}
+    ]
+
+    for id, text in english_texts.items():
+        # Append the user's prompt to the messages for each text.
+       
+        messages.append(
+            {"role": "user", "content": f"Can you extract ten words from this character's text that are meaningful and significant to the character, with one being there name? Please only output the ten words.\n\n{text}\n\n"}
+        )
+
+        # Perform the task using ChatGPT
+        chat_response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=messages
+        )
+
+       
+        reply = chat_response.choices[0].message.content.strip()
+        
+        # Store the extracted words for each ID.
+        words_for_puzzles[id] = reply
+        print(f"This is the Reply for ID {id}: {reply}\n\n")
+    
+    return words_for_puzzles
+
+#function that splits the words and ids, preparing them for puzzle creation
+def wordsearchCreator(words_for_puzzles):
+    puzzles = {}
+    answer_keys = {}  
+    word_lists = {}
+    for id, words_string in words_for_puzzles.items():
+       
+        word_list = words_string.replace(',', '').replace("'", "").upper().split()
+
+        
+        word_lists[id] = word_list
+       
+        grid_size = max(len(word) for word in word_list)
+       
+        grid_size += 5 
+        
+       
+        grid = [['-' for _ in range(grid_size)] for _ in range(grid_size)]
+        answer_positions = [] 
+
+        for word in word_list:
+           
+            placed, positions = placeWord(grid, word)
+            if placed:
+                
+                answer_positions.extend(positions)
+        
+        fillEmptySpots(grid)
+        
+        puzzles[id] = grid
+        answer_keys[id] = answer_positions 
+    
+    return puzzles, answer_keys, word_lists
+
+#function to randomly place words in the grid
+def placeWord(grid, word):
+    max_attempts = 100    
+    attempts = 0
+    placed = False
+    positions = []  
+
+    while not placed and attempts < max_attempts:
+        wordPlacement = random.randint(0, 3)
+        attempts += 1
+
+        if wordPlacement == 0:  # Horizontal
+            row = random.randint(0, len(grid) - 1)
+            col = random.randint(0, len(grid) - len(word))
+            space_available = all(grid[row][col + i] == '-' or grid[row][col + i] == word[i] for i in range(len(word)))
+            if space_available:
+                for i in range(len(word)):
+                    grid[row][col + i] = word[i]
+                    positions.append((row, col + i))  
+                placed = True
+
+        elif wordPlacement == 1:  # Vertical
+            row = random.randint(0, len(grid) - len(word))
+            col = random.randint(0, len(grid) - 1)
+            space_available = all(grid[row + i][col] == '-' or grid[row + i][col] == word[i] for i in range(len(word)))
+            if space_available:
+                for i in range(len(word)):
+                    grid[row + i][col] = word[i]
+                    positions.append((row + i, col))  
+                placed = True
+
+        elif wordPlacement == 2:  # Diagonal left to right
+            row = random.randint(0, len(grid) - len(word))
+            col = random.randint(0, len(grid) - len(word))
+            space_available = all(grid[row + i][col + i] == '-' or grid[row + i][col + i] == word[i] for i in range(len(word)))
+            if space_available:
+                for i in range(len(word)):
+                    grid[row + i][col + i] = word[i]
+                    positions.append((row + i, col + i)) 
+                placed = True
+
+        elif wordPlacement == 3:  # Diagonal right to left
+            row = random.randint(0, len(grid) - len(word))
+            col = random.randint(len(word) - 1, len(grid) - 1)
+            space_available = all(grid[row + i][col - i] == '-' or grid[row + i][col - i] == word[i] for i in range(len(word)))
+            if space_available:
+                for i in range(len(word)):
+                    grid[row + i][col - i] = word[i]
+                    positions.append((row + i, col - i))  
+                placed = True
+
+    return placed, positions
+
+#function to fill the empty slots after words are placed                 
+def fillEmptySpots(grid):
+    for row in range(len(grid)):
+        for col in range(len(grid[0])):  
+            if grid[row][col] == '-':  
+                grid[row][col] = random.choice(string.ascii_uppercase)
+            
+def createWordsearchWordsHtml(puzzles, answer_keys, word_lists):
+    page = 1
+    html_content = """
+    <html>
+    <head>
+    <title>Word Search Puzzles</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .page {
+            page-break-after: always;
+            margin-bottom: 20px;
+        }
+        @media screen {
+            .page {
+                border-bottom: 1px solid #ccc;
+                padding-bottom: 20px;
+            }
+        }
+        table {
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        td {
+            border: 1px solid #666;
+            width: 20px;
+            height: 20px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .highlight {
+            color: red; /* Highlight color for answer key */
+            font-weight: bold;
+        }
+        ul {
+            list-style-type: none; /* Removes bullets from the list */
+            padding: 0;
+        }
+        li {
+            margin: 5px 0; /* Adds some spacing between list items */
+        }
+    </style>
+    </head>
+    <body>
+    """
+
+    # Generate regular puzzles with word lists
+    for id, grid in puzzles.items():
+        html_content += f"<div class='page'><h2>Page No: {page} - Puzzle ID: {id}</h2><table>"
+        for row in grid:
+            html_content += "<tr>"
+            for cell in row:
+                html_content += f"<td>{cell}</td>"
+            html_content += "</tr>"
+        html_content += "</table>"
+        
+        # Print the word list in a column below the puzzle
+        html_content += f"<div><strong>Words:</strong><ul>"
+        for word in word_lists[id]:
+            html_content += f"<li>{word}</li>"
+        html_content += "</ul></div></div>"
+        
+        page += 1
+
+    # Generate answer key puzzles
+    for id, positions in answer_keys.items():
+        grid = puzzles[id] 
+        html_content += f"<div class='page'><h2>Answer Key Page No: {page} - Puzzle ID: {id}</h2><table>"
+        for row_idx, row in enumerate(grid):
+            html_content += "<tr>"
+            for col_idx, cell in enumerate(row):
+                if (row_idx, col_idx) in positions:
+                    html_content += f"<td class='highlight'>{cell}</td>"
+                else:
+                    html_content += f"<td>{cell}</td>"
+            html_content += "</tr>"
+        html_content += "</table></div>"
+        page += 1
+
+    html_content += "</body></html>"
+    return html_content
+
+
+
+def save_and_display_html(html_content, base_filename="puzzles_package"):
+    html_filename = f"{base_filename}.html"
+    counter = 1
+    
+    # Increment filename if exists to avoid overwriting
+    while os.path.exists(html_filename):
+        html_filename = f"{base_filename}_{counter}.html"
+        counter += 1
+
+    # Save HTML to file
+    with open(html_filename, 'w') as file:
+        file.write(html_content)
+    print(f"HTML content has been saved to {html_filename}.")
+    
+    # Format the file path for browser compatibility and open it
+    try:
+        file_url = f"file://{os.path.abspath(html_filename)}"
+        webbrowser.open(file_url, new=2)
+        print("HTML file has been opened in your web browser.")
+    except Exception as e:
+        print(f"Failed to open the HTML file in a web browser. Error: {e}")
+        
+#function that creates the tables to be used for the slides.       
+def add_puzzle_table(slide, grid, title_text, answer_positions=None):
+    title = slide.shapes.title
+    title.text = title_text
+
+    rows, cols = len(grid), len(grid[0])
+    table = slide.shapes.add_table(rows + 1, cols, Inches(1), Inches(1.5), Inches(8), Inches(5.5)).table  
+    table.first_row = False
+    table.horz_banding = False
+    table.vert_banding = False
+
+    for r in range(rows):
+        for c in range(cols):
+            cell = table.cell(r, c)
+            cell.text = grid[r][c]
+            if answer_positions and (r, c) in answer_positions:
+                cell.text_frame.paragraphs[0].font.color.rgb = RGBColor(255, 0, 0)  
+            cell.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+
+def make_powerpoint(puzzles, answer_keys, word_lists):
+    prs = Presentation()
+    
+    # Create slides for all regular puzzles
+    for id, grid in puzzles.items():
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
+        add_puzzle_table(slide, grid, f"Puzzle ID: {id}")
+        words_slide = prs.slides.add_slide(prs.slide_layouts[5])
+        words_text = "\n".join(word_lists[id])  # Word list in a column
+        textbox = words_slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(5.5))
+        textbox.text = f"Words to find for Puzzle ID: {id}:\n{words_text}"
+
+    # Create slides for all answer keys, highlighting answers
+    for id, positions in answer_keys.items():
+        answer_grid = puzzles[id] 
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
+        add_puzzle_table(slide, answer_grid, f"Answer Key ID: {id}", answer_positions=positions)
+
+    return prs
+
+def save_powerpoint(prs, base_filename="puzzles_package"):
+    filename = f"{base_filename}.pptx"
+    counter = 1
+    
+    # Increment filename if exists to avoid overwriting
+    while os.path.exists(filename):
+        filename = f"{base_filename}_{counter}.pptx"
+        counter += 1
+
+    # Save PowerPoint to file
+    prs.save(filename)
+    print(f"PowerPoint content has been saved to {filename}.")
+    
 def generate_word_search_package():
-    print("word puzzles have been generated")
+    
+    dress_data = apiRunner()
+
+    
+    english_texts = fetch_english_text(dress_data)
+
+   
+    puzzleWords = wordSearchOpenAi(english_texts)
+
+    
+    puzzles, answer_keys, word_lists = wordsearchCreator(puzzleWords)
+
+    
+    html_puzzles = createWordsearchWordsHtml(puzzles, answer_keys, word_lists)
+
+   
+    save_and_display_html(html_puzzles)
+    print("HTML word puzzles have been generated and saved.")
+
+   
+    prs = make_powerpoint(puzzles, answer_keys, word_lists)
+
+    
+    save_powerpoint(prs, base_filename="word_puzzles_package")
+    print("PowerPoint word puzzles have been generated and saved.")
+
+
 
 '''
 Spins up new thread to run generateUpdate function
