@@ -1,4 +1,5 @@
 import sys, io, requests, threading, webbrowser, urllib, os, platform, openpyxl, string, textwrap, re, time, textstat
+import traceback
 import tkinter as tk
 from tkinter import ttk, messagebox
 from pptx import Presentation
@@ -14,13 +15,12 @@ from textblob import TextBlob
 from bs4 import BeautifulSoup
 import wikipediaapi
 import openai
-import traceback
 
 # pip install googletrans
 # pip install googletrans==4.0.0-rc1
 import googletrans
 
-openai.api_key = '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'
+openai.api_key = 'private'
 
 ROOT_WIDTH = 1000 # app window width
 ROOT_HEIGHT = 600 # app window height
@@ -391,6 +391,7 @@ def add_did_you_know_text(slide, dress_did_you_know, left, top, width, height):
 Add the dress image 
 '''
 def add_image(slide, dress_info, left, top):
+    print(dress_info, flush=True)
     image_width_px = int(pic_width_var.get())
     image_height_px = int(pic_height_var.get())
     image_width_inch = image_width_px / 96
@@ -714,6 +715,7 @@ def generateBook():
     progress_window.destroy() # close progress bar window
 
     openFile(file_name)
+    print(sorted_dress_data)
 
 '''
 Helper function to wrap text
@@ -1229,7 +1231,7 @@ def generatePairs():
 Function to fetch the english text from dress data
 '''
 def fetch_english_text(dress_data):
-    english_texts = {}
+    english_texts = {}  
     for dress in dress_data:
         dress_id = dress.get('id')
         english_description = {
@@ -1277,15 +1279,15 @@ Performs change of third person text to first person
 '''
 def translate_text_to_first_person(english_texts):
     i = 1
-    tries = 0
+    tries = 1
     sleep_timer = 0
     first_person_texts = {} # Dictionary to hold the translated text
     translated_ids_file = 'translated_ids.txt'
     translated_ids = read_translated_ids(translated_ids_file)
-    print(translated_ids)
+    print(translated_ids, flush=True)
 
 
-    with open("output.txt", "a") as file: # Opens a text file to append the translated text
+    with open("output.txt", "a") as file: # Opens a text file to write the translated text
         pass
 
     messages = [{"role": "system", "content": 
@@ -1296,67 +1298,138 @@ def translate_text_to_first_person(english_texts):
         if str(id) in translated_ids:
             print(f"ID: {id} was found to be translated already.\n\n", flush=True)
             continue
+
         first_person_texts[id] = {}
-        
         for key, text in texts.items():
-            if key in ("description", "did_you_know"):
-                try_count = 0
-                while try_count < 3:
-                    try:
+            if key == "description" or key == "did_you_know":
+                try:
 
-                        # Perform conversion from third person to first person using ChatGPT
-                        messages.append(
-                                {"role": "user", "content": f"Convert the following text to first person:\n\n{text}\n\n"}
-                                )
-                        chat = openai.ChatCompletion.create(
-                            model="gpt-3.5-turbo",
-                            messages=messages
-                        )
-                        reply = chat.choices[0].message.content
-                        first_person_texts[id][key] = reply
+                    # Perform conversion from third person to first person using ChatGPT
+                    messages.append(
+                            {"role": "user", "content": f"Convert the following text to first person:\n\n{text}\n\n"}
+                            )
+                    chat = openai.ChatCompletion.create(
+                        model="gpt-3.5-turbo",
+                        messages=messages
+                    )
+                    reply = chat.choices[0].message.content
+                    first_person_texts[id][key] = reply
 
-                        print(f"The ID: {id}\nThe KEY: {key}\nThe TEXT: {text}\nThe REPLY: {reply}\nTries: {tries}\n\n", flush=True)
-                        tries += 1
-                        if tries > 60:
-                            #time.sleep(60)
-                            #sleep_timer = 0
-                            print("\n\nSLEEPING FOR 60 SECONDS\n\n", flush=True)
-                            break
+                    print(f"The ID: {id}\nThe KEY: {key}\nThe TEXT: {text}\nThe REPLY: {reply}\nTries: {tries}\n\n", flush=True)
+                    tries += 1
+                    if tries > 40:
                         break
-                    except Exception as e:
-                        sleep_timer += 5
-                        time.sleep(sleep_timer)
-                        print("\n\nError Occurred: \n", e, flush=True)
-                        print(f"ID: {id}, Key: {key}, Text: {text}\n", flush=True)
-                        try_count += 1
-                        if try_count == 3:
-                            print("REACHED", flush=True)
-                        else:
-                            print("Retrying...", flush=True)
+                except Exception as e:
+                    sleep_timer += 1
+                    time.sleep(sleep_timer)
+                    print("\n\nError Occurred: \n", e, flush=True)
 
                     #first_person_texts[id] = first_person_text.choices[0].text.strip()
             else:
                 first_person_texts[id][key] = text
 
-        with open("output.txt", "a") as file:
-            file.write(f"Original text from ID: {id}\n")
-            file.write(f"Description:\n{english_texts[id]['description']}\n")
-            file.write(f"Did You Know:\n{english_texts[id]['did_you_know']}\n\n")
-            file.write(f"First-person text from ID: {id}\n")
-            file.write(f"Description:\n{first_person_texts[id]['description']}\n")
-            file.write(f"Did You Know:\n{first_person_texts[id]['did_you_know']}\n")
-            file.write("======================================================================================\n")
-
-        translated_ids.add(id)
-        write_translated_ids(translated_ids, translated_ids_file)
-        print(f"======================\nCharacter {i} Translated\n======================\n", flush=True)
-        i+= 1
-        print(f"Sleeper Timer at: {sleep_timer}", flush=True)
-        print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++", flush=True)
-        if tries > 60:
+        if 'description' in first_person_texts[id] and 'did_you_know' in first_person_texts[id]:
+            translated_ids.add(id)
+            write_translated_ids(translated_ids, translated_ids_file)
+            with open("output.txt", "a") as file:
+                file.write(f"Original text from ID: {id}\n")
+                file.write(f"Description:\n{english_texts[id]['description']}\n")
+                file.write(f"Did You Know:\n{english_texts[id]['did_you_know']}\n\n")
+                file.write(f"First-person text from ID: {id}\n")
+                file.write(f"Description:\n{first_person_texts[id]['description']}\n")
+                file.write(f"Did You Know:\n{first_person_texts[id]['did_you_know']}\n")
+                file.write("======================================================================================\n")
+            print(f"======================\nCharacter {i} Translated\n======================\n", flush=True)
+            i+= 1
+            print(f"Sleeper Timer at: {sleep_timer}", flush=True)
+            print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++", flush=True)
+        if tries > 40:
             break
     print("\n\nDONE WITH EVERYTHING\n\n", flush=True)
     return first_person_texts
+
+'''
+Create powerpoint for first person text
+'''
+def first_person_pptx(first_person_text):
+    try:
+
+        prs = Presentation()
+        ppt_file_name = "fpp.pptx"
+        file_name = "fpp.pptx"
+        count = 0
+        while os.path.exists(file_name):
+            count += 1
+            file_name = f"{os.path.splittext(ppt_file_name)[0]}({count}).pptx"
+
+        progress_window = tk.Toplevel(root)
+        progress_window.title('Creating First Person Pptx')
+        sw = int(progress_window.winfo_screenwidth()/2 - 450/2)
+        sh = int(progress_window.winfo_screenheight()/2 - 70/2)
+        progress_window.geometry(f'450x70+{sw}+{sh}')
+        progress_window.resizable(False, False)
+        progress_window.attributes('-disable', True)
+        progress_window.focus()
+
+        # progress bar custom style
+        pb_style = ttk.Style()
+        pb_style.theme_use('clam')
+        pb_style.configure('green.Horizontal.TProgressbar', foreground='#1ec000', background='#1ec000')
+
+        # frame to hold progress bar
+        pb_frame = tk.Frame(progress_window)
+        pb_frame.pack()
+
+        # progress bar
+        pb = ttk.Progressbar(pb_frame, length=400, style='green.Horizontal.TProgressbar', mode='determinate', maximum=100, value=0)
+        pb.pack(pady=10)
+
+        # label for percent complete
+        percent_label = tk.Label(pb_frame, text='Creating Powerpoint...0%')
+        percent_label.pack()
+        complete = 0
+
+        for id, dress_info in first_person_text.items():
+            dress_data = {'id': id}
+            print("ID", id, flush=True)
+            print("DRESS INFO: ", dress_info, flush=True)
+            dress_name = first_person_text[id].get('name', '')
+            dress_description = first_person_text[id].get('description', '')
+            dress_did_you_know = first_person_text[id].get('did_you_know', '')
+
+            #--------------------------------Portrait--------------------------------
+            # PORTRAIT MODE
+            prs.slide_width = pptx.util.Inches(7.5) # define slide width
+            prs.slide_height = pptx.util.Inches(10.83) # define slide height
+            slide_layout = prs.slide_layouts[5] # use slide with only title
+            slide_layout2 = prs.slide_layouts[6] # use empty slide
+
+            slide_empty = prs.slides.add_slide(slide_layout2) 
+            slide_title = prs.slides.add_slide(slide_layout) 
+
+            add_image(slide_empty, dress_data, 0, 0)
+            #image_width_px = int(pic_width_var.get())
+            #image_height_px = int(pic_height_var.get())
+            #image_width_inch = image_width_px / 96
+            #image_height_inch = image_height_px / 96
+            #picture = slide_title.shapes.add_picture(f'./images/Slide{id}.png', 0, Inches(0.83), Inches(image_width_inch), Inches(image_height_inch))
+            add_title_box(slide_title, dress_name, 0, 0.15, 7.5, 0.91) 
+            add_subtitle_highlight(slide_title, 0.37, 1.58, 2.44, 0.3) # description - highlight box
+            add_description_subtitle(slide_title, 0.28, 1.07, 6.94, 0.51)
+            add_description_text(slide_title, dress_description, 0.28, 1.65, 6.94, 5.99)
+            add_subtitle_highlight(slide_title, 0.37, 8.36, 2.78, 0.3) # did you know - highlight box
+            add_did_you_know_subtitle(slide_title, 0.28, 7.87, 6.94, 0.51)
+            add_did_you_know_text(slide_title, dress_did_you_know, 0.28, 8.46, 6.94, 1.04)
+            #add_numbering(slide_title, dress_info, id, 4.47, 10.06, 1.28, 0.34, 5.94, 10.06, 1.28, 0.34)
+            complete += 1
+            #pb['value'] = (complete/len(first_person_text))*100 # calculate percentage of images downloaded
+            #percent_label.config(text=f'Creating Book...{int(pb["value"])}%')
+            dress_data.clear()
+        prs.save(file_name)
+        openFile(file_name)
+    except Exception as e:
+        traceback.print_exc()
+
 
 """
     Create an HTML package with English and Telugu texts.
@@ -1545,7 +1618,8 @@ def generate_first_person_package():
         dress_data = apiRunner() 
         english_texts = fetch_english_text(dress_data)
         first_person_texts = translate_text_to_first_person(english_texts)
-        html_content = create_html_package_gpt(english_texts, first_person_texts)
+        first_person_pptx(first_person_texts)
+        create_html_package_gpt(english_texts, first_person_texts)
         html_filename, txt_filename = save_html_to_file_gpt(english_texts, first_person_texts)
         webbrowser.open(f'file://{os.path.realpath(html_filename)}')
     except FileNotFoundError:
@@ -1554,7 +1628,7 @@ def generate_first_person_package():
         print(f'Error: {e}')
     finally:
         first_person_generate_button.config(state='normal')
-    print("Translation package has been generated and saved.")
+    print("Translation package has been generated and saved.", flush=True)
 
 
 '''
