@@ -19,12 +19,16 @@ import random
 from xml.dom.expatbuilder import FragmentBuilderNS
 from localspelling import convert_spelling 
 from localspelling.spelling_converter import get_dictionary 
+import requests
+import pyttsx3
+from gtts import gTTS
+from tkinter import filedialog
 
 # pip install googletrans
 # pip install googletrans==4.0.0-rc1
 import googletrans
 
-openai.api_key = 'private'
+openai.api_key = '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'
 
 ROOT_WIDTH = 1000 # app window width
 ROOT_HEIGHT = 600 # app window height
@@ -1737,9 +1741,119 @@ def generate_first_person_package():
         first_person_generate_button.config(state='normal')
     print("Translation package has been generated and saved.", flush=True)
 
+'''
+Upload File
+'''
+def uploadFilename():
+    filename = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
+    if filename:
+        text_field_UPLOAD.delete(0, tk.END) 
+        text_field_UPLOAD.insert(0, filename)
 
 '''
-Spins up new thread to run generateUpdate function
+Play Audio
+'''
+def playAudio():
+    try:
+        engine = pyttsx3.init()
+        text = text_field_Description.get("1.0", tk.END)
+        engine.say(text)
+        engine.runAndWait()
+    except Exception as e:
+       messagebox.showerror("Play Audio Error", str(e))
+
+'''
+Save Audio
+'''
+def saveAudio():
+    try:
+        engine = pyttsx3.init()
+        text = text_field_Description.get("1.0", tk.END)
+        #id = text_field_ID.get()
+        engine.save_to_file(text, f"{text_field_ID.get()}.mp3")
+        engine.runAndWait()
+        messagebox.showinfo("Save Audio", "Audio saved as id.mp3")
+    except Exception as e:
+        messagebox.showerror("Save Audio Error", str(e))
+
+def SaveAllAudios():
+    update_dress_list = []
+    # get dress numbers from text field
+    get_text_field = text_field.get("1.0", "end-1c").split(',')
+
+    # add to list
+    for number in get_text_field:
+        if (number.strip().isnumeric()):
+            update_dress_list.append(int(number.strip()))
+    for num in update_dress_list:
+        print(num)
+        fetchTextAndSaveAudio(num)
+
+def fetchTextAndSaveAudio(id):
+    headers = {
+        'Accept': '*/*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36'
+    }
+    try:
+        # Replace with the actual API endpoint you're supposed to hit
+        url = f"https://abcd2.projectabcd.com/api/getinfo.php?id={id}"
+        response = requests.get(url, headers=headers)
+        if response.ok:
+            data = response.json()
+            description = data['data']['description']
+
+            # Convert the description to audio
+            tts = gTTS(description, lang='en')
+            # Save the audio file named as id.mp3
+            audio_file_path = f"{id}.mp3"
+            tts.save(audio_file_path)
+        else:
+            print(f"Failed to fetch data for ID {id}: {response.status_code}, {response.reason}")
+    except Exception as e:
+        print(f"Error fetching data for ID {id}: {e}")
+
+'''
+Get Text
+'''
+def fetchText(id):
+    headers = {
+        'Accept': '*/*',  # Use wildcard or specific type based on API requirement
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36'
+    }
+    try:
+        url = f"https://abcd2.projectabcd.com/api/getinfo.php?id={id}"
+        response = requests.get(url, headers=headers)
+        # print("Request Headers:", response.request.headers)
+        if response.ok:
+            # print("API Response:", response.text)
+            data = response.json()
+            # description = data.get("description", "No description found.")
+            description = data['data']['description']
+            text_field_Description.delete(1.0, tk.END)  # This clears all text from the widget
+            root.after(0, lambda: text_field_Description.insert(tk.END, description))
+        else:
+            print("Failed to fetch data:", response.status_code, response.reason)
+            messagebox.showerror("Error", f"Failed to fetch data from the server: {response.reason}, Status Code: {response.status_code}")
+    except Exception as e:
+        traceback.print_exc()
+        print("Error:", str(e))
+        messagebox.showerror("Error", str(e))
+
+'''
+Spins up new thread to run getText function
+'''
+def getTextThread():
+    dress_id = text_field_ID.get()
+    if dress_id:
+        thread = threading.Thread(target=fetchText, args=(dress_id,))
+        thread.start()
+    else:
+        messagebox.showerror("Error", "Please enter a dress ID.")
+
+######################################################################THREAD SECTION########################################################################################
+
+'''
+Spins up new thread to run generateBook
 '''
 def startGenerateBookThread():
     book_gen_generate_button.config(state="disabled")
@@ -1811,6 +1925,23 @@ def startFirstPersonThread():
     first_person_thread.start()
 
 '''
+Spins up new thread to run playAudio function
+'''
+def playAudioThread():
+    get_audio_button.config(state='disabled')
+    get_audio_thread = threading.Thread(target=playAudio)
+    get_audio_thread.start()
+
+'''
+Spins up new thread to run saveAudio function
+'''
+def saveAudioThread():
+    get_audio_button.config(state='disabled')
+    get_audio_thread = threading.Thread(target=saveAudio)
+    get_audio_thread.start()
+
+
+'''
 Launch help site when user clicks Help button
 '''
 def launchHelpSite():
@@ -1872,6 +2003,29 @@ def raiseFrame(frame):
         text_field_label.tkraise()
         text_field.tkraise()
         root.title("Project ABCD US/UK Spellings")
+    elif frame == 'Get_audio_frame':
+        Get_audio_frame.tkraise()
+        text_field_label_ID_Address.tkraise()
+        # text_field_label_ID_Address.tkraise()
+        text_field_label_Description.tkraise()
+        text_field_Description.tkraise()
+        text_field_ID.tkraise()
+        play_audio_button.tkraise()
+        save_audio_button.tkraise()
+        upload_audio_button.tkraise()
+        get_text_button.tkraise()
+        root.title("Project ABCD Get Audio")
+    elif frame == "all_audio_frame":
+        all_audio_frame.tkraise()
+        all_audio_button.tkraise()
+        root.title("Project ABCD Word Analysis")
+    elif frame == "DOB_Analyzer_frame":
+        DOB_Analyzer_frame.tkraise()
+        word_analysis_button.tkraise()
+        word_analysis_back_button.tkraise()
+        text_field_UPLOAD.tkraise()
+        UPLOAD_FILE_button.tkraise()
+        root.title("Project ABCD Word Analysis")
 
 
 #--------------------------------Main Frame-----------------------------------------------------------------------------------------------
@@ -1894,7 +2048,7 @@ title_label.pack(pady=100)
 # Create buttons widget
 ## Button settings
 main_button_frame = tk.Frame(main_frame)
-main_button_frame.place(relx=.5, rely=.5, anchor='center')
+main_button_frame.place(relx=.5, rely=.45, anchor='center')
 button_width = 20
 button_height = 3
 button_bgd_color = "#007FFF"
@@ -1913,7 +2067,7 @@ word_analysis_report_button = tk.Button(main_button_frame, text="Word Analysis R
 word_analysis_report_button.pack(side="left", padx=50)
 
 main_button_frame2 = tk.Frame(main_frame)
-main_button_frame2.place(relx=.5, rely=.7, anchor='center')
+main_button_frame2.place(relx=.5, rely=.60, anchor='center')
 
 ## Google Images: Create an Excel file with 3 image links to the selected dresses
 google_image_button = tk.Button(main_button_frame2, text="Google Image", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('google_image_frame'))
@@ -1928,7 +2082,7 @@ who_are_my_pairs_button = tk.Button(main_button_frame2, text="Who Are My Pairs?"
 who_are_my_pairs_button.pack(side="left", padx=50)
 
 main_button_frame3 = tk.Frame(main_frame)
-main_button_frame3.place(relx=.5, rely=.9, anchor='center')
+main_button_frame3.place(relx=.5, rely=.75, anchor='center')
 
 ## US Spelling: translate us to uk spellings
 us_uk_spelling_button = tk.Button(main_button_frame3, text="US/UK Spellings", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('translation_to_us_spellings_frame'))
@@ -1941,6 +2095,22 @@ translation_package_button.pack(side="left", padx=50)
 ## First Person: fetches text from api, uses ChatGPT to reword the description and did you know text to first person
 first_person_button = tk.Button(main_button_frame3, text="First Person Conversion", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('first_person_frame'))
 first_person_button.pack(side="left", padx=50)
+
+main_button_frame4 = tk.Frame(main_frame)
+main_button_frame4.place(relx=.5, rely=.90, anchor='center')
+
+##Get Audio Frame
+get_audio_button = tk.Button(main_button_frame4, text="Get Audio", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('Get_audio_frame'))
+get_audio_button.pack(side="left", padx=50)
+
+
+## get all Audio Frame
+get_all_audio_button = tk.Button(main_button_frame4, text="Get All Audio", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('all_audio_frame'))
+get_all_audio_button.pack(side="left", padx=50)
+
+## get DOB Analyzer Frame
+DOB_Analyzer_button = tk.Button(main_button_frame4, text="DOB Analyzer", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('DOB_Analyzer_frame'))
+DOB_Analyzer_button.pack(side="left", padx=50)
 
 #--------------------------------Book Gen Frame---------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------------------------
@@ -2371,6 +2541,128 @@ translation_to_us_spellings_back_button.pack(side="right", padx=30)
 
 # place button frame on word analysis frame
 translation_to_us_spellings_button_frame.pack(side="bottom", pady=10)
+
+'''
+    ##Get Audio Frame
+    =============================
+'''
+
+#--------------Get Audio Frame--------------------------------------------------------------------#
+Get_audio_frame = tk.Frame(root, width=1000, height=600)
+Get_audio_frame.pack_propagate(False)
+Get_audio_frame.grid(row=0, column=0, sticky='news')
+
+#button frame
+Get_audio_button_frame = tk.Frame(Get_audio_frame)
+
+#--------------------------------Insert the dress ID-----------------------------------------------------------------------------------------------
+# Input text label 
+text_field_label_ID_Address = tk.Label(root, text="Insert the dress ID", font=LABEL_FONT)
+text_field_label_ID_Address.place(x=25, y=72.5)
+
+# input text field
+text_field_ID = tk.Entry(root)
+text_field_ID.place(x=230, y=60, relwidth=.1, height=50)
+
+text_field_ID = tk.Entry(root)
+text_field_ID.place(x=230, y=60, relwidth=.1, height=50)
+
+# #Get text
+get_text_button = tk.Button(Get_audio_frame, text="get text", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=getTextThread)
+get_text_button.place(x=350, y=60, relwidth=.1, height=50)
+
+#Descript text label
+text_field_label_Description = tk.Label(root, text="Description", font=LABEL_FONT)
+text_field_label_Description.place(x=25, y=200)
+
+# input text field
+text_field_Description = tk.Text(Get_audio_frame)
+text_field_Description.place(x=230, y=170, relwidth=.5, height=300)
+
+
+#play Audio
+play_audio_button = tk.Button(Get_audio_button_frame, text="Play Audio", font=LABEL_FONT, width=18, height=1, bg="#007FFF", fg="#ffffff", command=playAudio)
+play_audio_button.pack(side="left", padx=30)
+
+#Save Audio
+save_audio_button = tk.Button(Get_audio_button_frame, text="Save Audio", font=LABEL_FONT, width=18, height=1, bg="#007FFF", fg="#ffffff", command=saveAudio)
+save_audio_button.pack(side="left", padx=30)
+
+# #upload Audio
+upload_audio_button = tk.Button(Get_audio_button_frame, text="Upload Audio", font=LABEL_FONT, width=18, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+upload_audio_button.pack(side="left", padx=30)
+
+
+
+# back button
+audio_back_button = tk.Button(Get_audio_button_frame, text="Back", font=LABEL_FONT, width=18, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+audio_back_button.pack(side="left", padx=30)
+
+# place button frame on diff report frame
+Get_audio_button_frame.pack(side="bottom", pady=10)
+
+
+'''
+    ##Get All Audio Frame
+    =============================
+'''
+
+#--------------------------------------------------------------------------------------------------------------------------------------------------
+all_audio_frame = tk.Frame(root, width=1000, height=600)
+all_audio_frame.pack_propagate(False)
+all_audio_frame.grid(row=0, column=0, sticky='news')
+
+#--------------------------------get all audios Buttons-----------------------------------------------------------------------------------------------
+# button frame
+all_audio_button_frame = tk.Frame(all_audio_frame)
+
+# word analysis button
+all_audio_button = tk.Button(all_audio_button_frame, text="Save audio", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=SaveAllAudios)
+# back button
+all_audio_back_button = tk.Button(all_audio_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+# pack buttons into button frame
+all_audio_button.pack(side="left", padx=35)
+all_audio_back_button.pack(side="left", padx=30)
+
+# place button frame on word analysis frame
+all_audio_button_frame.pack(side="bottom", pady=10)
+
+
+'''
+    ##DOB Analayser Frame
+    =============================
+'''
+
+#--------------------------------------------------------------------------------------------------------------------------------------------------
+DOB_Analyzer_frame = tk.Frame(root, width=1000, height=600)
+DOB_Analyzer_frame.pack_propagate(False)
+DOB_Analyzer_frame.grid(row=0, column=0, sticky='news')
+
+#--------------------------------DOB Analayser Buttons-----------------------------------------------------------------------------------------------
+# button frame
+DOB_Analayser_button_frame = tk.Frame(DOB_Analyzer_frame)
+
+
+# Create an Entry widget for displaying the filename
+text_field_UPLOAD = tk.Entry(root)
+text_field_UPLOAD.place(x=230, y=60, relwidth=.3, height=50)
+
+# Create a Button to trigger the file upload
+UPLOAD_FILE_button = tk.Button(root, text="Upload File", command=uploadFilename, bg="#007FFF", fg="#ffffff")
+UPLOAD_FILE_button.place(x=500, y=60, relwidth=.1, height=50)
+
+
+# DOB Analayser report button
+DOB_Analayser_report_button = tk.Button(DOB_Analayser_button_frame, text="Generate HTML", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+# back button
+DOB_Analayser_back_button = tk.Button(DOB_Analayser_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+
+# pack buttons into button frame
+DOB_Analayser_report_button.pack(side="left", padx=35)
+DOB_Analayser_back_button.pack(side="left", padx=30)
+
+# place button frame on DOB Analayser report frame
+DOB_Analayser_button_frame.pack(side="bottom", pady=10)
 
 #-------------------------------Start Main Frame----------------------------------------------------------------------------------------------
 
