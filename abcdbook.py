@@ -1,7 +1,7 @@
-import random
 import sys, io, requests, threading, webbrowser, urllib, os, platform, openpyxl, string, textwrap, re, time, textstat
-from xml.dom.expatbuilder import FragmentBuilderNS
+import requests
 import tkinter as tk
+from tkinter import filedialog
 from tkinter import ttk, messagebox
 from pptx import Presentation
 import pptx.util
@@ -15,16 +15,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from textblob import TextBlob
 from bs4 import BeautifulSoup
 import wikipediaapi
-import openai
+import pyttsx3
+from gtts import gTTS
 
 # pip install googletrans
 # pip install googletrans==4.0.0-rc1
 import googletrans
 
-openai.api_key = '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'
-
 ROOT_WIDTH = 1000 # app window width
-ROOT_HEIGHT = 600 # app window height
+ROOT_HEIGHT = 600 # app window heightF
 
 root = tk.Tk()
 root.title("Project ABCD Admin Panel")
@@ -63,10 +62,7 @@ except FileNotFoundError:
         "SUBTITLE_SIZE" : "24",
         "SUBTITLE_FONT" : "Arial",
         "PIC_WIDTH" : "720",
-        "PIC_HEIGHT" : "1040",
-        "PUZ_WIDTH" : "20",
-        "PUZ_HEIGHT" : "20",
-        "WORD_COUNT": "10"
+        "PIC_HEIGHT" : "1040"
     }
     tk.messagebox.showwarning(title='Warning', message='No preferences.txt file exists in directory. Default preferences.txt will be created and used.')
     print('No preferences.txt file exists in directory. Default preferences.txt will be created and used.')
@@ -999,6 +995,8 @@ def diffReport():
     finally:
         diff_report_button.config(state="normal")
 
+
+
 '''
 Returns 3 google images url and put into excel sheet
 '''
@@ -1178,671 +1176,122 @@ def generateWikiLink():
 
     wiki_link_gen_button.config(state='normal')
 
-'''
-Generates an xcel file with the pairs found
-'''
-def generatePairs():
-    file_path = 'APIData.xlsx'  # Change to the actual file path
-    api_dress_data = sorted(apiRunner(), key=lambda x: x['id'])  # Assuming apiRunner() returns dress data
-    pairs = []
 
+
+'''
+Upload file
+'''
+def uploadFilename():
+    filename = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
+    if filename:
+        text_field_UPLOAD.delete(0, tk.END) 
+        text_field_UPLOAD.insert(0, filename)  
+
+'''
+Play Audio
+'''
+def playAudio():
     try:
-        # Read dress data from Excel file
-        sheet_dress_data = pd.read_excel(file_path)      
-        sheet_dress_data.dropna(subset=['id'], inplace=True)  # Drop rows with missing IDs
-        sheet_dress_data['description'].fillna('', inplace=True)  # Remove NA/NAN from description column
-        sheet_dress_data['did_you_know'].fillna('', inplace=True)  # Remove NA/NAN from did_you_know column
-
-	# Iterate through API dress data
-        for data_that_will_be_searched in api_dress_data:
-            # Get the name of the current API data ID
-            name = data_that_will_be_searched['name']
-            # Split the name into tokens and remove any prefixes
-            tokens = [token + " " for token in name.split() if token not in ["Dr.", "Mr.", "Mrs.", "Ms."]]
-
-            # Loop through each token
-            for token in tokens:
-                # Loop through provided IDs instead of the entire sheet_dress_data
-                for data_that_contains_token in api_dress_data:
-                    # Get the description and did you know text of the provided ID
-                    description = data_that_contains_token['description']
-                    did_you_know = data_that_contains_token['did_you_know']
-
-                    # Check if the token is present in either of them, make sure we aren't looking on the same IDs
-                    if data_that_will_be_searched['id'] != data_that_contains_token['id']:
-                        if token in description or token in did_you_know:
-                            if (data_that_contains_token['id'], data_that_will_be_searched['id']) not in [(pair[0], pair[2]) for pair in pairs]:
-                                # Add the pair of IDs and names to the list
-                                pairs.append([data_that_contains_token['id'], data_that_contains_token['name'], data_that_will_be_searched['id'], name])
-                            # Break the inner loop as we found a pair for this token
-                            break
-
-        # Generate table and save to Excel
-        column_headers = ['ID1', 'Name 1', 'ID2', 'Name 2']
-        generate_table(pairs, 'generate_pairs', column_headers, 50, 200, 'center', 1)
-        df_pairs = pd.DataFrame(pairs, columns=column_headers)
-        df_pairs.to_excel("pairs_generated.xlsx", index=False)
-        print("Excel file 'pairs_generated.xlsx' created.")
-
-    except FileNotFoundError:
-        print(f"File '{file_path}' not found.")
+        engine = pyttsx3.init()
+        text = text_field_Description.get("1.0", tk.END)
+        engine.say(text)
+        engine.runAndWait()
     except Exception as e:
-        print(f'Error: {e}')
-
+        messagebox.showerror("Play Audio Error", str(e))
+    
 '''
-Function to fetch the english text from dress data
+Save Audio
 '''
-def fetch_english_text(dress_data):
-    english_texts = {}  
-    for dress in dress_data:
-        dress_id = dress.get('id')
-        english_description = {
-            'name': dress.get('name', ''),
-            'description': dress.get('description', ''),
-            'did_you_know': dress.get('did_you_know', '')
-        }
-        english_texts[dress_id] = english_description
-    return english_texts
-'''
-translation function that stores the translated telugu texts into the same "keys" as the english for easier formatting
-'''
-def translate_text_to_telugu(english_texts):
-    translator = googletrans.Translator()
-    telugu_texts = {}
-
-    for id, texts in english_texts.items():
-        telugu_texts[id] = {}  # Initialize a dictionary for this ID
-        for key, text in texts.items():
-            try:
-                translated = translator.translate(text, dest='te')  # 'te' for Telugu
-                telugu_texts[id][key] = translated.text
-            except Exception as e:
-                print(f"Error translating {key} for ID {id}: {e}")
-                telugu_texts[id][key] = text  # Use the original text if translation fails
-
-    return telugu_texts
-
-def translate_text_to_first_person(english_texts):
-    first_person_texts = {} # Dictionary to hold the translated text
-    messages = [{"role": "system", "content": 
-                 "You translate text from third person to first person. Don't reply with anything. Just do the work."}]
-
-
-    for id, texts in english_texts.items():
-        first_person_texts[id] = {}
-        for key, text in texts.items():
-
-            # Perform conversion from third person to first person using ChatGPT
-            messages.append(
-                    {"role": "user", "content": f"Convert the following text from the third person to the first person?\n\n{text}\n\n"}
-                    )
-            chat = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=messages
-            )
-            reply = chat.choices[0].message.content
-            first_person_texts[id][key] = reply
-            print(f"This is the Reply: {reply}\n\n")
-            print(first_person_texts)
-            #first_person_texts[id] = first_person_text.choices[0].text.strip()
-    return first_person_texts
-
-"""
-    Create an HTML package with English and Telugu texts.
-    """
-def create_html_package(english_texts, telugu_texts):
-    page = 1
-    html_content = """
-    <html>
-    <head>
-    <style>
-        .name { font-weight: bold; text-align: center; }
-        .did_you_know { margin-top: 20px; font-size: 18px; }
-        .page {
-            page-break-after: always;
-        }
-        @media screen {
-            .page {
-                border-bottom: 1px solid #ccc;
-                padding-bottom: 20px;
-                margin-bottom: 20px;
-            }
-        }
-    </style>
-    </head>
-    <body>
-    """
-    for id, english_text in english_texts.items():
-        telugu_text = telugu_texts.get(id, {'name': '', 'description': '', 'did_you_know': ''})
-        html_content += f"<div class='page'><h2>Page No: {page} ABCDid: {id} (English)</h2>"
-        html_content += f"<div class='name'>{english_text['name']}</div>"
-        html_content += f"<p class='description'>{english_text['description']}</p>"
-        html_content += "<div class='did_you_know'>Did you know?</div>"
-        html_content += f"<p>{english_text['did_you_know']}</p></div><hr>"
-        
-        html_content += f"<div class='page'><h2>Page No: {page} ABCDid: {id} (Telugu)</h2>"
-        html_content += f"<div class='name'>{telugu_text['name']}</div>"
-        html_content += f"<p class='description'>{telugu_text['description']}</p>"
-        html_content += "<div class='did_you_know'>Did you know?</div>"
-        html_content += f"<p>{telugu_text['did_you_know']}</p></div><hr>"
-        page += 1
-    html_content += "</body></html>"
-    return html_content
-
-def create_html_package_gpt(english_texts, first_person_texts):
-    page = 1
-    html_content = """
-    <html>
-    <head>
-    <style>
-        .name { font-weight: bold; text-align: center; }
-        .did_you_know { margin-top: 20px; font-size: 18px; }
-        .page {
-            page-break-after: always;
-        }
-        @media screen {
-            .page {
-                border-bottom: 1px solid #ccc;
-                padding-bottom: 20px;
-                margin-bottom: 20px;
-            }
-        }
-    </style>
-    </head>
-    <body>
-    """
-    for id, english_text in english_texts.items():
-        first_person_text = first_person_texts.get(id, {'name': '', 'description': '', 'did_you_know': ''})
-        html_content += f"<div class='page'><h2>Page No: {page} ABCD-id: {id} (English)</h2>"
-        html_content += f"<div class='name'>{english_text['name']}</div>"
-        html_content += f"<div class='description>'>Description</div>"
-        html_content += f"<p>{english_text['description']}</p>"
-        html_content += "<div class='did_you_know'>Did you know?</div>"
-        html_content += f"<p>{english_text['did_you_know']}</p></div><hr>"
-        
-        html_content += f"<div class='page'><h2>Page No: {page} ABCD-id: {id} (ChatGPT)</h2>"
-        html_content += f"<div class='name'>{english_text['name']}</div>"
-        html_content += f"<div class='description>'>Description</div>"
-        html_content += f"<p>{first_person_text['description']}</p>"
-        html_content += "<div class='did_you_know'>Did you know?</div>"
-        html_content += f"<p>{first_person_text['did_you_know']}</p></div><hr>"
-        page += 1
-    html_content += "</body></html>"
-    return html_content
-
-"""
-    Save the HTML content to a file, appending an incrementing number to the filename
-    to avoid overwrites.
-    """
-def save_html_to_file(english_texts, telugu_texts, base_filename="translation_package"):
-    html_filename = f"{base_filename}.html"
-    txt_filename = f"{base_filename}.txt"
-    counter = 1
-    # Check if the file exists and update the filename until it's unique
-    while os.path.exists(html_filename) or os.path.exists(txt_filename):
-        html_filename = f"{base_filename}_{counter}.html"
-        txt_filename = f"{base_filename}_{counter}.txt"
-        counter += 1
-    
-    # Saving HTML content
-    with open(html_filename, 'w', encoding='utf-8') as file:
-        file.write(create_html_package(english_texts, telugu_texts))  # Assuming create_html_package is defined as before
-    
-    # Creating a plain text version of the content
-    text_content = ""
-    for id, english_text in english_texts.items():
-        telugu_text = telugu_texts.get(id, '')
-        text_content += f"English Text for ID {id}\n{english_text}\n\n"
-        text_content += "------------------------------------------------\n\n"
-        text_content += f"Telugu Text for ID {id}\n{telugu_text}\n\n"
-        text_content += "================================================\n\n"
-    
-    # Saving text content
-    with open(txt_filename, 'w', encoding='utf-8') as file:
-        file.write(text_content)
-
-    return html_filename, txt_filename
-
-def save_html_to_file_gpt(english_texts, first_person_texts, base_filename="gpt_adjusted_package"):
-    html_filename = f"{base_filename}.html"
-    txt_filename = f"{base_filename}.txt"
-    counter = 1
-    # Check if the file exists and update the filename until it's unique
-    while os.path.exists(html_filename) or os.path.exists(txt_filename):
-        html_filename = f"{base_filename}_{counter}.html"
-        txt_filename = f"{base_filename}_{counter}.txt"
-        counter += 1
-    
-    # Saving HTML content
-    with open(html_filename, 'w', encoding='utf-8') as file:
-        file.write(create_html_package_gpt(english_texts, first_person_texts))  # Assuming create_html_package is defined as before
-    
-    # Creating a plain text version of the content
-    text_content = ""
-    for id, english_text in english_texts.items():
-        telugu_text = first_person_texts.get(id, '')
-        text_content += f"English Text for ID {id}\n{english_text}\n\n"
-        text_content += "------------------------------------------------\n\n"
-        text_content += f"ChatGPT Text for ID {id}\n{telugu_text}\n\n"
-        text_content += "================================================\n\n"
-    
-    # Saving text content
-    with open(txt_filename, 'w', encoding='utf-8') as file:
-        file.write(text_content)
-
-    return html_filename, txt_filename
-
-def generate_translation_package():
-    # Get ID numbers from text area
+def saveAudio():
     try:
-
-        dress_data = apiRunner()
-        
-        # Fetch English text
-        english_texts = fetch_english_text(dress_data)
-        
-
-        # Translate to Telugu
-        telugu_texts = translate_text_to_telugu(english_texts)
-        
-        # Create HTML package
-        html_content = create_html_package(english_texts, telugu_texts)
-    
-        
-        # Save HTML and TXT files
-        html_filename, txt_filename = save_html_to_file(english_texts, telugu_texts)
-    
-        
-        # Open the HTML file in a web browser
-        webbrowser.open(f'file://{os.path.realpath(html_filename)}')
-    
-    except FileNotFoundError:
-        print(f"File '{e}' not found.")
+        engine = pyttsx3.init()
+        text = text_field_Description.get("1.0", tk.END)
+        #id = text_field_ID.get()
+        engine.save_to_file(text, f"{text_field_ID.get()}.mp3")
+        engine.runAndWait()
+        messagebox.showinfo("Save Audio", "Audio saved as id.mp3")
     except Exception as e:
-        print(f'Error: {e}')
-    finally:
-        translation_package_generate_button.config(state='normal')
+        messagebox.showerror("Save Audio Error", str(e))
+
+    
+def SaveAllAudios():
+    update_dress_list = []
+    # get dress numbers from text field
+    get_text_field = text_field.get("1.0", "end-1c").split(',')
         
-        # Optionally, show a message that the file has been saved
-        print("Translation package has been generated and saved.")
+    # add to list
+    for number in get_text_field:
+        if (number.strip().isnumeric()):
+            update_dress_list.append(int(number.strip()))
 
 
+    for num in update_dress_list:
+        print(num)
+        fetchTextAndSaveAudio(num)
 
-def generate_first_person_package():
+def fetchTextAndSaveAudio(id):
+    headers = {
+        'Accept': '*/*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36'
+    }
     try:
-
-        dress_data = apiRunner() 
-        english_texts = fetch_english_text(dress_data)
-        first_person_texts = translate_text_to_first_person(english_texts)
-        html_content = create_html_package_gpt(english_texts, first_person_texts)
-        html_filename, txt_filename = save_html_to_file_gpt(english_texts, first_person_texts)
-        webbrowser.open(f'file://{os.path.realpath(html_filename)}')
-    except FileNotFoundError:
-        print(f"File '{e}' not found")
-    except Exception as e:
-        print(f'Erro: {e}')
-    finally:
-        first_person_generate_button.config(state='normal')
-    print("Translation package has been generated and saved.")
-
-def generate_first_person_package():
-    dress_data = apiRunner() 
-    english_texts = fetch_english_text(dress_data)
-    first_person_texts = translate_text_to_first_person(english_texts)
-    html_content = create_html_package(english_texts, first_person_texts)
-    html_filename, txt_filename = save_html_to_file(html_content)
-    webbrowser.open(f'file://{os.path.realpath(html_filename)}')
-    print("Translation package has been generated and saved.")
-
-def wordSearchOpenAi(english_texts):
-    words_for_puzzles = {}
-    word_count = int(word_count_var.get())  # Get the current preferred word count
-
-    messages = [
-        {"role": "system", "content": f"You will extract {word_count} meaningful words significant to the character's text. Do not reply with anything else. Just list the words."}
-    ]
-
-    #sorted_texts = sort_english_texts(english_texts)  # Sort texts based on preference
-
-    for id, text in english_texts.items():
-        messages.append(
-            {"role": "user", "content": f"Can you extract {word_count} words from this character's text that are meaningful and significant to the character, with one being their name? Please only output the {word_count} words.\n\n{text}\n\n"}
-        )
-        
-        chat_response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=messages
-        )
-       
-        reply = chat_response.choices[0].message.content.strip()
-        
-        words_for_puzzles[id] = reply
-        print(f"This is the Reply for ID {id}: {reply}\n\n")
-    
-    return words_for_puzzles
-
-
-#function that splits the words and ids, preparing them for puzzle creation
-def wordsearchCreator(words_for_puzzles):
-    puzzles = {}
-    answer_keys = {}  
-    word_lists = {}
-    for id, words_string in words_for_puzzles.items():
-        word_list = words_string.replace(',', '').replace("'", "").upper().split()
-        word_lists[id] = word_list
-        grid_size = int(puz_width_var.get())  # Ensure this is correctly fetched
-        grid = [['-' for _ in range(grid_size)] for _ in range(grid_size)]
-        answer_positions = {}
-
-        for word in word_list:
-            placed, positions = placeWord(grid, word)  # This function needs to be adapted to return start and end points too
-            if placed:
-                answer_positions[word] = {'start': positions[0], 'end': positions[-1]}
-
-        fillEmptySpots(grid)
-        puzzles[id] = grid
-        answer_keys[id] = answer_positions
-    
-    return puzzles, answer_keys, word_lists
-
-
-#function to randomly place words in the grid
-def placeWord(grid, word):
-    max_attempts = 100    
-    attempts = 0
-    placed = False
-    positions = []  
-
-    while not placed and attempts < max_attempts:
-        wordPlacement = random.randint(0, 3)
-        attempts += 1
-
-        if wordPlacement == 0:  # Horizontal
-            row = random.randint(0, len(grid) - 1)
-            col = random.randint(0, len(grid) - len(word))
-            space_available = all(grid[row][col + i] == '-' or grid[row][col + i] == word[i] for i in range(len(word)))
-            if space_available:
-                for i in range(len(word)):
-                    grid[row][col + i] = word[i]
-                    positions.append((row, col + i))  
-                placed = True
-
-        elif wordPlacement == 1:  # Vertical
-            row = random.randint(0, len(grid) - len(word))
-            col = random.randint(0, len(grid) - 1)
-            space_available = all(grid[row + i][col] == '-' or grid[row + i][col] == word[i] for i in range(len(word)))
-            if space_available:
-                for i in range(len(word)):
-                    grid[row + i][col] = word[i]
-                    positions.append((row + i, col))  
-                placed = True
-
-        elif wordPlacement == 2:  # Diagonal left to right
-            row = random.randint(0, len(grid) - len(word))
-            col = random.randint(0, len(grid) - len(word))
-            space_available = all(grid[row + i][col + i] == '-' or grid[row + i][col + i] == word[i] for i in range(len(word)))
-            if space_available:
-                for i in range(len(word)):
-                    grid[row + i][col + i] = word[i]
-                    positions.append((row + i, col + i)) 
-                placed = True
-
-        elif wordPlacement == 3:  # Diagonal right to left
-            row = random.randint(0, len(grid) - len(word))
-            col = random.randint(len(word) - 1, len(grid) - 1)
-            space_available = all(grid[row + i][col - i] == '-' or grid[row + i][col - i] == word[i] for i in range(len(word)))
-            if space_available:
-                for i in range(len(word)):
-                    grid[row + i][col - i] = word[i]
-                    positions.append((row + i, col - i))  
-                placed = True
-
-    return placed, positions
-
-#function to fill the empty slots after words are placed                 
-def fillEmptySpots(grid):
-    for row in range(len(grid)):
-        for col in range(len(grid[0])):  
-            if grid[row][col] == '-':  
-                grid[row][col] = random.choice(string.ascii_uppercase)
+        # Replace with the actual API endpoint you're supposed to hit
+        url = f"https://abcd2.projectabcd.com/api/getinfo.php?id={id}"
+        response = requests.get(url, headers=headers)
+        if response.ok:
+            data = response.json()
+            description = data['data']['description']
             
-def createWordsearchWordsHtml(puzzles, answer_keys, word_lists):
-    page = 1
-    html_content = """
-    <html>
-    <head>
-    <title>Word Search Puzzles</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-        }
-        .page {
-            page-break-after: always;
-            margin-bottom: 20px;
-        }
-        table {
-            border-collapse: collapse;
-            margin: 20px 0;
-            position: relative;
-        }
-        td {
-            border: 1px solid #666;
-            width: 20px;
-            height: 20px;
-            text-align: center;
-            vertical-align: middle;
-        }
-        .highlighted {
-            font-weight: bold;  /* Make the text bold */
-            color: black;  /* Ensure the text is black */
-        }
-        .answer-line {
-            position: absolute;
-            stroke: red;
-            stroke-width: 2;
-            marker-end: url(#arrowhead);
-        }
-        .svg-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;  /* Allows clicks to pass through to the table */
-        }
-    </style>
-    </head>
-    <body>
-    <svg style="display:none;">
-        <defs>
-            <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
-                <path d="M0,0 L0,6 L9,3 z" fill="red" />
-            </marker>
-        </defs>
-    </svg>
-    """
-
-    # Generate regular puzzles with word lists
-    for id, grid in puzzles.items():
-        html_content += f"<div class='page'><h2>Page No: {page} - Puzzle ID: {id}</h2><table>"
-        for row in grid:
-            html_content += "<tr>"
-            for cell in row:
-                html_content += f"<td>{cell}</td>"
-            html_content += "</tr>"
-        html_content += "</table><div><strong>Words:</strong><ul>"
-        for word in word_lists[id]:
-            html_content += f"<li>{word}</li>"
-        html_content += "</ul></div></div>"
-        page += 1
-
-    # Generate answer key puzzles and draw SVG lines directly for each word
-    for id, positions in answer_keys.items():
-        grid = puzzles[id]
-        html_content += f"<div class='page'><h2>Answer Key Page No: {page} - Puzzle ID: {id}</h2><div style='position: relative;'>"
-        html_content += "<table>"
-        for row_idx, row in enumerate(grid):
-            html_content += "<tr>"
-            for col_idx, cell in enumerate(row):
-                if (row_idx, col_idx) in positions:
-                    html_content += f"<td class='highlighted'>{cell}</td>"
-                else:
-                    html_content += f"<td>{cell}</td>"
-            html_content += "</tr>"
-        html_content += "</table>"
-
-        # SVG overlay for drawing lines
-        html_content += "<div class='svg-container'><svg style='width: 100%; height: 100%;'>"
-        for word, pos in positions.items():
-            start = pos['start']
-            end = pos['end']
-            start_x = start[1] * 20 + 10
-            start_y = start[0] * 20 + 10
-            end_x = end[1] * 20 + 10
-            end_y = end[0] * 20 + 10
-            html_content += f"<line x1='{start_x}' y1='{start_y}' x2='{end_x}' y2='{end_y}' class='answer-line'></line>"
-        html_content += "</svg></div></div>"
-        page += 1
-
-    html_content += "</body></html>"
-    return html_content
-
-
-
-
-
-
-
-def save_and_display_html(html_content, base_filename="puzzles_package"):
-    html_filename = f"{base_filename}.html"
-    counter = 1
-    
-    # Increment filename if exists to avoid overwriting
-    while os.path.exists(html_filename):
-        html_filename = f"{base_filename}_{counter}.html"
-        counter += 1
-
-    # Save HTML to file
-    with open(html_filename, 'w') as file:
-        file.write(html_content)
-    print(f"HTML content has been saved to {html_filename}.")
-    
-    # Format the file path for browser compatibility and open it
-    try:
-        file_url = f"file://{os.path.abspath(html_filename)}"
-        webbrowser.open(file_url, new=2)
-        print("HTML file has been opened in your web browser.")
+            # Convert the description to audio
+            tts = gTTS(description, lang='en')
+            # Save the audio file named as id.mp3
+            audio_file_path = f"{id}.mp3"
+            tts.save(audio_file_path)
+        else:
+            print(f"Failed to fetch data for ID {id}: {response.status_code}, {response.reason}")
     except Exception as e:
-        print(f"Failed to open the HTML file in a web browser. Error: {e}")
-        
-from pptx.util import Inches, Pt
-from pptx.enum.shapes import MSO_SHAPE
-from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_CONNECTOR
+        print(f"Error fetching data for ID {id}: {e}")
 
 
-def add_puzzle_table(slide, grid, word_list, title_text, answer_positions=None):
-    title = slide.shapes.title
-    title.text = title_text
+'''
+Get Text
+'''
+def fetchText(id):
+    headers = {
+        'Accept': '*/*',  # Use wildcard or specific type based on API requirement
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36'
+    }
+    try:
+        url = f"https://abcd2.projectabcd.com/api/getinfo.php?id={id}"
+        response = requests.get(url, headers=headers)
+        # print("Request Headers:", response.request.headers)
+        if response.ok:
+            # print("API Response:", response.text)
+            data = response.json()
+            # description = data.get("description", "No description found.")
+            description = data['data']['description']
+            text_field_Description.delete(1.0, tk.END)  # This clears all text from the widget
+            root.after(0, lambda: text_field_Description.insert(tk.END, description))
+        else:
+            print("Failed to fetch data:", response.status_code, response.reason)
+            messagebox.showerror("Error", f"Failed to fetch data from the server: {response.reason}, Status Code: {response.status_code}")
+    except Exception as e:
+        print("Error:", str(e))
+        messagebox.showerror("Error", str(e))
 
-    rows, cols = len(grid), len(grid[0])
-    grid_origin_x = Inches(1)  
-    grid_origin_y = Inches(1.5)  
-    max_width = Inches(6)  
-    max_height = Inches(4.5)  # Total available height for the grid
-    cell_width = max_width / cols
-    cell_height = max_height / rows
-
-    # Add the grid table
-    table = slide.shapes.add_table(rows, cols, grid_origin_x, grid_origin_y, round(cell_width * cols), round(cell_height * rows)).table
-    table.first_row = False
-
-    for r in range(rows):
-        for c in range(cols):
-            cell = table.cell(r, c)
-            cell.text = grid[r][c]
-            cell.text_frame.paragraphs[0].font.size = Pt(10)
-            cell.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
-
-    # Add lines for correct answers
-    if answer_positions:
-        for word, pos in answer_positions.items():
-            start_cell = pos['start']
-            end_cell = pos['end']
-            start_x = grid_origin_x + start_cell[1] * cell_width + cell_width / 2
-            start_y = grid_origin_y + start_cell[0] * cell_height + cell_height / 2
-            end_x = grid_origin_x + end_cell[1] * cell_width + cell_width / 2
-            end_y = grid_origin_y + end_cell[0] * cell_height + cell_height / 2
-
-            line = slide.shapes.add_shape(MSO_SHAPE.LINE_INVERSE, start_x, start_y, end_x, end_y)
-            line.line.width = Pt(2)
-            line.line.color.rgb = RGBColor(255, 0, 0)  # Set line color to red
-
-    # Add word list to the side
-    textbox = slide.shapes.add_textbox(Inches(7.5), Inches(1.5), Inches(2), Inches(4))
-    tf = textbox.text_frame
-    p = tf.add_paragraph()
-    p.text = "Words to find:\n" + "\n".join(word_list)
-    p.font.bold = True
-    p.font.size = Pt(14)
-
-
-
-def make_powerpoint(puzzles, answer_keys, word_lists):
-    prs = Presentation()
-    for id, grid in puzzles.items():
-        slide = prs.slides.add_slide(prs.slide_layouts[5])  # Use a blank layout
-        add_puzzle_table(slide, grid, word_lists[id], f"Puzzle ID: {id}")
-
-    # Add a slide for each answer key
-    for id, positions in answer_keys.items():
-        slide = prs.slides.add_slide(prs.slide_layouts[5])  # Use a blank layout
-        add_puzzle_table(slide, puzzles[id], word_lists[id], f"Answer Key ID: {id}", answer_positions=positions)
-
-    return prs
-
-
-
-
-def save_powerpoint(prs, base_filename="puzzles_package"):
-    filename = f"{base_filename}.pptx"
-    counter = 1
-    
-    # Increment filename if exists to avoid overwriting
-    while os.path.exists(filename):
-        filename = f"{base_filename}_{counter}.pptx"
-        counter += 1
-
-    # Save PowerPoint to file
-    prs.save(filename)
-    print(f"PowerPoint content has been saved to {filename}.")
-    
-def generate_word_search_package():
-    
-    dress_data = apiRunner()
-
-    
-    english_texts = fetch_english_text(dress_data)
-
-   
-    puzzleWords = wordSearchOpenAi(english_texts)
-
-    
-    puzzles, answer_keys, word_lists = wordsearchCreator(puzzleWords)
-
-    
-    html_puzzles = createWordsearchWordsHtml(puzzles, answer_keys, word_lists)
-
-   
-    save_and_display_html(html_puzzles)
-    print("HTML word puzzles have been generated and saved.")
-
-   
-    prs = make_powerpoint(puzzles, answer_keys, word_lists)
-
-    
-    save_powerpoint(prs, base_filename="word_puzzles_package")
-    print("PowerPoint word puzzles have been generated and saved.")
+'''
+Spins up new thread to run getText function
+'''
+def getTextThread():
+    """
+    Starts a new thread to fetch text based on the dress ID.
+    """
+    dress_id = text_field_ID.get()
+    if dress_id:
+        thread = threading.Thread(target=fetchText, args=(dress_id,))
+        thread.start()
+    else:
+        messagebox.showerror("Error", "Please enter a dress ID.")
 
 
 
@@ -1861,6 +1310,23 @@ def startDiffReportThread():
     diff_report_button.config(state='disabled')
     diff_report_thread = threading.Thread(target=diffReport)
     diff_report_thread.start()
+
+'''
+Spins up new thread to run playAudio function
+'''
+def playAudioThread():
+    get_audio_button.config(state='disabled')
+    get_audio_thread = threading.Thread(target=playAudio)
+    get_audio_thread.start()
+
+'''
+Spins up new thread to run saveAudio function
+'''
+def saveAudioThread():
+    get_audio_button.config(state='disabled')
+    get_audio_thread = threading.Thread(target=saveAudio)
+    get_audio_thread.start()
+
 
 '''
 Spins up new thread to run wordAnalysis function
@@ -1885,38 +1351,6 @@ def startGenerateWikiLinkThread():
     wiki_link_gen_button.config(state='disabled')
     wiki_link_thread = threading.Thread(target=generateWikiLink)
     wiki_link_thread.start()
-
-'''
-Spins up new thread to run generatePairs function
-'''
-def startGeneratePairsThread():
-    who_are_my_pairs_gen_button.config(state='disabled')
-    who_are_my_pairs_thread = threading.Thread(target=generatePairs)
-    who_are_my_pairs_thread.start()
-
-'''
-Spins up new thread to run translatepackage function
-'''
-def startTranslationPackageThread():
-    translation_package_generate_button.config(state="disabled")
-    translate_package_thread = threading.Thread(target=generate_translation_package)
-    translate_package_thread.start()
-
-'''
-Spins up new thread to run translate_to_first person function
-'''
-def startFirstPersonThread():
-    first_person_generate_button.config(state="disabled")
-    first_person_thread = threading.Thread(target=generate_first_person_package)
-    first_person_thread.start()
-
-'''
-Spins up new thread to run word search function
-'''
-def startWordPuzzleThread():
-    word_puzzle_generate_button.config(state="disabled")
-    word_search_thread = threading.Thread(target=generate_word_search_package)
-    word_search_thread.start()
 
 '''
 Launch help site when user clicks Help button
@@ -1961,29 +1395,37 @@ def raiseFrame(frame):
         text_field_label.tkraise()
         text_field.tkraise()
         root.title("Project ABCD Wiki Link")
-    elif frame == 'who_are_my_pairs_frame':
-        who_are_my_pairs_frame.tkraise()
+    elif frame == 'Get_audio_frame':
+        Get_audio_frame.tkraise()
+        text_field_label_ID_Address.tkraise()
+        # text_field_label_ID_Address.tkraise()
+        text_field_label_Description.tkraise()
+        text_field_Description.tkraise()
+        text_field_ID.tkraise()
+        play_audio_button.tkraise()
+        save_audio_button.tkraise()
+        upload_audio_button.tkraise()
+        get_text_button.tkraise()
+        root.title("Project ABCD Get Audio")
+    elif frame == "all_audio_frame":
+        all_audio_frame.tkraise()
+        all_audio_button.tkraise()
         text_field_label.tkraise()
         text_field.tkraise()
-        root.title("Project ABCD Who Are My Pairs")
-    elif frame == 'translation_package_frame':  
-        translation_package_frame.tkraise()
-        text_field_label.tkraise()
-        text_field.tkraise()
-        root.title("Project ABCD Translation Package")
-    elif frame == 'first_person_frame':
-        first_person_frame.tkraise()
-        text_field_label.tkraise()
-        text_field.tkraise()
-    elif frame == 'word_puzzle_frame':
-        word_puzzle_frame.tkraise()
-        text_field_label.tkraise()
-        text_field.tkraise()
-        root.title("Project ABCD Word Search Puzzles")
-        
+        root.title("Project ABCD Word Analysis")
+    elif frame == "DOB_Analyzer_frame":
+        DOB_Analyzer_frame.tkraise()
+        word_analysis_button.tkraise()
+        word_analysis_back_button.tkraise()
+        text_field_UPLOAD.tkraise()
+        UPLOAD_FILE_button.tkraise()
+        root.title("Project ABCD Word Analysis")
+
+
 
 
 #--------------------------------Main Frame-----------------------------------------------------------------------------------------------
+        
 #-----------------------------------------------------------------------------------------------------------------------------------------
 # configure grid to fill extra space and center
 tk.Grid.rowconfigure(root, 0, weight=1)
@@ -1999,6 +1441,7 @@ main_frame.grid(row=0, column=0, sticky='news')
 title_label = tk.Label(main_frame, text="Project ABCD\nMain Menu",  font=('Arial', 20))
 title_label.pack(pady=100)
 
+
 #--------------------------------Main Buttons-----------------------------------------------------------------------------------------------
 # Create buttons widget
 ## Button settings
@@ -2012,6 +1455,20 @@ button_font_color = "#ffffff"
 ## Generate Book: Gets selected dress from API and import into ppt
 generate_book_button = tk.Button(main_button_frame, text="Generate Book", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('book_gen_frame'))
 generate_book_button.pack(side="left", padx=50)
+
+    
+##Get Audio Frame
+get_audio_button = tk.Button(main_button_frame, text="Get Audio", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('Get_audio_frame'))
+get_audio_button.pack(side="left", padx=50)
+
+
+## get all Audio Frame
+get_all_audio_button = tk.Button(main_button_frame, text="Get All Audio", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('all_audio_frame'))
+get_all_audio_button.pack(side="left", padx=50)
+
+## get DOB Analyzer Frame
+DOB_Analyzer_button = tk.Button(main_button_frame, text="DOB Analyzer", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('DOB_Analyzer_frame'))
+DOB_Analyzer_button.pack(side="left", padx=50)
 
 ## Diff Report: Create a SQL file of dresses that got changed from excel sheet byt comparing to API
 diff_report_button = tk.Button(main_button_frame, text="Difference Report", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('diff_report_frame'))
@@ -2028,28 +1485,10 @@ main_button_frame2.place(relx=.5, rely=.7, anchor='center')
 google_image_button = tk.Button(main_button_frame2, text="Google Image", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('google_image_frame'))
 google_image_button.pack(side="left", padx=50)
 
-## Wiki Link: [FILL IN THE ACTION HERE]
 wiki_link_button = tk.Button(main_button_frame2, text="Wiki Link", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('wiki_link_frame'))
 wiki_link_button.pack(side="left", padx=50)
 
-## My Pairs: Shows pairs when they are searched
-who_are_my_pairs_button = tk.Button(main_button_frame2, text="Who Are My Pairs?", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('who_are_my_pairs_frame'))
-who_are_my_pairs_button.pack(side="left", padx=50)
 
-main_button_frame3 = tk.Frame(main_frame)
-main_button_frame3.place(relx=.5, rely=.9, anchor='center')
-
-## Generate Book: fetches English text from Api, uses google translate to generate "telugu" text, then creates HTML package with english text on page, and "telugu" text on another.
-translation_package_button = tk.Button(main_button_frame3, text="Translation Package", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('translation_package_frame'))
-translation_package_button.pack(side="left", padx=50)
-
-## First Person: fetches text from api, uses ChatGPT to reword the description and did you know text to first person
-first_person_button = tk.Button(main_button_frame3, text="First Person Conversion", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('first_person_frame'))
-first_person_button.pack(side="left", padx=50)
-
-## Word Puzzle: generates and creates crossword puzzles based of words in character descriptions
-word_puzzle_button = tk.Button(main_button_frame3, text="Word Puzzle Creator", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('word_puzzle_frame'))
-word_puzzle_button.pack(side="left", padx=50)
 #--------------------------------Book Gen Frame---------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------------------------
 # book gen frame
@@ -2126,7 +1565,6 @@ sort_frame.place(x=175, y=265, width=800)
 # sort radio buttons label
 sort_label = tk.Label(book_gen_frame, text="Sort Order:", font=LABEL_FONT)
 sort_label.place(x=25, y=265)
-
 
 # separator line
 separator2 = ttk.Separator(book_gen_frame)
@@ -2301,7 +1739,134 @@ book_gen_back_button.pack(side="left", padx=30)
 book_gen_button_frame.pack(side="bottom", pady=10)
 
 
-#--------------------------------Diff Report Frame-----------------------------------------------------------------------------------------------
+
+'''
+    ##Get Audio Frame
+    =============================
+'''
+
+#--------------Get Audio Frame--------------------------------------------------------------------#
+Get_audio_frame = tk.Frame(root, width=1000, height=600)
+Get_audio_frame.pack_propagate(False)
+Get_audio_frame.grid(row=0, column=0, sticky='news')
+
+#button frame
+Get_audio_button_frame = tk.Frame(Get_audio_frame)
+
+#--------------------------------Insert the dress ID-----------------------------------------------------------------------------------------------
+# Input text label 
+text_field_label_ID_Address = tk.Label(root, text="Insert the dress ID", font=LABEL_FONT)
+text_field_label_ID_Address.place(x=25, y=72.5)
+
+# input text field
+text_field_ID = tk.Entry(root)
+text_field_ID.place(x=230, y=60, relwidth=.1, height=50)
+
+text_field_ID = tk.Entry(root)
+text_field_ID.place(x=230, y=60, relwidth=.1, height=50)
+
+# #Get text
+get_text_button = tk.Button(Get_audio_frame, text="get text", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=getTextThread)
+get_text_button.place(x=350, y=60, relwidth=.1, height=50)
+
+#Descript text label
+text_field_label_Description = tk.Label(root, text="Description", font=LABEL_FONT)
+text_field_label_Description.place(x=25, y=200)
+
+# input text field
+text_field_Description = tk.Text(Get_audio_frame)
+text_field_Description.place(x=230, y=170, relwidth=.5, height=300)
+
+
+#play Audio
+play_audio_button = tk.Button(Get_audio_button_frame, text="Play Audio", font=LABEL_FONT, width=18, height=1, bg="#007FFF", fg="#ffffff", command=playAudio)
+play_audio_button.pack(side="left", padx=30)
+
+#Save Audio
+save_audio_button = tk.Button(Get_audio_button_frame, text="Save Audio", font=LABEL_FONT, width=18, height=1, bg="#007FFF", fg="#ffffff", command=saveAudio)
+save_audio_button.pack(side="left", padx=30)
+
+# #upload Audio
+upload_audio_button = tk.Button(Get_audio_button_frame, text="Upload Audio", font=LABEL_FONT, width=18, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+upload_audio_button.pack(side="left", padx=30)
+
+
+
+# back button
+audio_back_button = tk.Button(Get_audio_button_frame, text="Back", font=LABEL_FONT, width=18, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+audio_back_button.pack(side="left", padx=30)
+ 
+# place button frame on diff report frame
+Get_audio_button_frame.pack(side="bottom", pady=10)
+
+
+'''
+    ##Get All Audio Frame
+    =============================
+'''
+
+#--------------------------------------------------------------------------------------------------------------------------------------------------
+all_audio_frame = tk.Frame(root, width=1000, height=600)
+all_audio_frame.pack_propagate(False)
+all_audio_frame.grid(row=0, column=0, sticky='news')
+
+#--------------------------------get all audios Buttons-----------------------------------------------------------------------------------------------
+# button frame
+all_audio_button_frame = tk.Frame(all_audio_frame)
+
+# word analysis button
+all_audio_button = tk.Button(all_audio_button_frame, text="Save audio", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=SaveAllAudios)
+# back button
+all_audio_back_button = tk.Button(all_audio_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+# pack buttons into button frame
+all_audio_button.pack(side="left", padx=35)
+all_audio_back_button.pack(side="left", padx=30)
+
+# place button frame on word analysis frame
+all_audio_button_frame.pack(side="bottom", pady=10)
+
+
+'''
+    ##DOB Analayser Frame
+    =============================
+'''
+
+#--------------------------------------------------------------------------------------------------------------------------------------------------
+DOB_Analyzer_frame = tk.Frame(root, width=1000, height=600)
+DOB_Analyzer_frame.pack_propagate(False)
+DOB_Analyzer_frame.grid(row=0, column=0, sticky='news')
+
+#--------------------------------DOB Analayser Buttons-----------------------------------------------------------------------------------------------
+# button frame
+DOB_Analayser_button_frame = tk.Frame(DOB_Analyzer_frame)
+
+
+# Create an Entry widget for displaying the filename
+text_field_UPLOAD = tk.Entry(root)
+text_field_UPLOAD.place(x=230, y=60, relwidth=.3, height=50)
+
+# Create a Button to trigger the file upload
+UPLOAD_FILE_button = tk.Button(root, text="Upload File", command=uploadFilename, bg="#007FFF", fg="#ffffff")
+UPLOAD_FILE_button.place(x=500, y=60, relwidth=.1, height=50)
+
+
+# DOB Analayser report button
+DOB_Analayser_report_button = tk.Button(DOB_Analayser_button_frame, text="Generate HTML", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+# back button
+DOB_Analayser_back_button = tk.Button(DOB_Analayser_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+
+# pack buttons into button frame
+DOB_Analayser_report_button.pack(side="left", padx=35)
+DOB_Analayser_back_button.pack(side="left", padx=30)
+
+# place button frame on DOB Analayser report frame
+DOB_Analayser_button_frame.pack(side="bottom", pady=10)
+
+
+'''
+    ##Diff Report Frame
+    =============================
+'''
 #------------------------------------------------------------------------------------------------------------------------------------------------
 diff_report_frame = tk.Frame(root, width=1000, height=600)
 diff_report_frame.pack_propagate(False)
@@ -2310,10 +1875,12 @@ diff_report_frame.grid(row=0, column=0, sticky='news')
 #--------------------------------Diff Report Buttons-----------------------------------------------------------------------------------------------
 # button frame
 diff_report_button_frame = tk.Frame(diff_report_frame)
+
 # difference report button
 diff_report_button = tk.Button(diff_report_button_frame, text="Diff Report", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startDiffReportThread)
 # back button
 diff_back_button = tk.Button(diff_report_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+
 # pack buttons into button frame
 diff_report_button.pack(side="left", padx=35)
 diff_back_button.pack(side="left", padx=30)
@@ -2322,7 +1889,13 @@ diff_back_button.pack(side="left", padx=30)
 diff_report_button_frame.pack(side="bottom", pady=10)
 
 
-#--------------------------------Word Analysis Frame-----------------------------------------------------------------------------------------------
+
+
+
+'''
+    ##Word Analysis Frame
+    =============================
+'''
 #--------------------------------------------------------------------------------------------------------------------------------------------------
 word_analysis_frame = tk.Frame(root, width=1000, height=600)
 word_analysis_frame.pack_propagate(False)
@@ -2342,7 +1915,13 @@ word_analysis_back_button.pack(side="left", padx=30)
 # place button frame on word analysis frame
 word_analysis_button_frame.pack(side="bottom", pady=10)
 
-#--------------------------------Google Image Frame-----------------------------------------------------------------------------------------------
+
+
+
+'''
+    ##Google Image Frame
+    =============================
+'''
 #--------------------------------------------------------------------------------------------------------------------------------------------------
 google_image_frame = tk.Frame(root, width=1000, height=600)
 google_image_frame.pack_propagate(False)
@@ -2376,7 +1955,10 @@ download_google_image_checkbutton.place(x=170, y=150)
 # place button frame on word analysis frame
 google_image_button_frame.pack(side="bottom", pady=10)
 
-#--------------------------------Wiki Link Frame-----------------------------------------------------------------------------------------------
+'''
+    ##Wiki Link Frame
+    =============================
+'''
 #------------------------------------------------------------------------------------------------------------------------------------------------
 wiki_link_frame = tk.Frame(root, width=1000, height=600)
 wiki_link_frame.pack_propagate(False)
@@ -2396,194 +1978,8 @@ wiki_link_back_button.pack(side="left", padx=30)
 # place button frame on word analysis frame
 wiki_link_gen_button_frame.pack(side="bottom", pady=10)
 
-#--------------------------------Who Are My Pairs Frame-----------------------------------------------------------------------------------------------
-#------------------------------------------------------------------------------------------------------------------------------------------------
-who_are_my_pairs_frame = tk.Frame(root, width=1000, height=600)
-who_are_my_pairs_frame.pack_propagate(False)
-who_are_my_pairs_frame.grid(row=0, column=0, sticky='news')
-
-#--------------------------------Who Are My Pairs Buttons-----------------------------------------------------------------------------------
-#button frame
-who_are_my_pairs_gen_button_frame = tk.Frame(who_are_my_pairs_frame)
-
-who_are_my_pairs_gen_button = tk.Button(who_are_my_pairs_gen_button_frame, text="Generate Pairs", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startGeneratePairsThread)
-who_are_my_pairs_back_button = tk.Button(who_are_my_pairs_gen_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
-
-# pack button into button frame
-who_are_my_pairs_gen_button.pack(side="left", padx=35)
-who_are_my_pairs_back_button.pack(side="left", padx=30)
-
-# place button frame on word analysis frame?
-who_are_my_pairs_gen_button_frame.pack(side="bottom", pady=10)
-
-#--------------------------------Translation Package Frame-----------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------------------------------------------------------------
-translation_package_frame = tk.Frame(root, width=1000, height=600)
-translation_package_frame.pack_propagate(False)
-translation_package_frame.grid(row=0, column=0, sticky='news')
-
-#--------------------------------Translation Package Buttons-----------------------------------------------------------------------------------------------
-# generate button frame
-translation_package_button_frame = tk.Frame(translation_package_frame)
-# generate button
-translation_package_generate_button = tk.Button(translation_package_button_frame, text="Generate", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startTranslationPackageThread)
-# help button
-translation_package_help_button = tk.Button(translation_package_button_frame, text="Help", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=launchHelpSite)
-# upload button
-translation_package_back_button = tk.Button(translation_package_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
-# pack buttons into button frame
-translation_package_generate_button.pack(side="left", padx=35)
-translation_package_help_button.pack(side="left")
-translation_package_back_button.pack(side="left", padx=30)
-
-# place button frame on word analysis frame
-translation_package_button_frame.pack(side="bottom", pady=10)
-
-#-------------------------------First Person Frame-------------------------------------------------------------------------------------------
-first_person_frame = tk.Frame(root, width=1000, height=600)
-first_person_frame.pack_propagate(False)
-first_person_frame.grid(row=0, column=0, sticky='news')
-
-#------------------------------------First Person Buttons-------------------------------------------------------------------------------------
-first_person_button_frame = tk.Frame(first_person_frame)
-
-first_person_generate_button = tk.Button(first_person_button_frame, text="Generate", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startFirstPersonThread)
-first_person_back_button = tk.Button(first_person_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
-
-# pack buttons into button frame
-first_person_generate_button.pack(side="left", padx=35)
-first_person_back_button.pack(side="left", padx=30)
-
-# place button frame on <something>
-first_person_button_frame.pack(side="bottom", pady=10)
-#-------------------------------Word Search Frame-------------------------------------------------------------------------------------------
-word_puzzle_frame = tk.Frame(root, width=1000, height=600)
-word_puzzle_frame.pack_propagate(False)
-word_puzzle_frame.grid(row=0, column=0, sticky='news')
-
-#------------------------------------Word Search Buttons-------------------------------------------------------------------------------------
-word_puzzle_button_frame = tk.Frame(word_puzzle_frame)
-
-word_puzzle_generate_button = tk.Button(word_puzzle_button_frame, text="Generate", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startWordPuzzleThread)
-word_puzzle_back_button = tk.Button(word_puzzle_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
-
-# pack buttons into button frame
-word_puzzle_generate_button.pack(side="left", padx=35)
-word_puzzle_back_button.pack(side="left", padx=30)
-
-# place button frame on <something>
-word_puzzle_button_frame.pack(side="bottom", pady=10)
-
-#--------------------------------Layout Radio Buttons-------------------------------------------------------------------------------------
-# layout variable
-layout = tk.IntVar()
-layout.set(4)
-
-# layout frame
-layout_frame = tk.Frame(word_puzzle_frame)
-# layout radio buttons
-layout_radio4 = tk.Radiobutton(layout_frame, text="Puzzle on Left - Text on right - Single Page - Portrait Mode",
-                                font=MAIN_FONT, variable=layout, value=4)
-layout_radio1 = tk.Radiobutton(layout_frame, text="Puzzle on Left Page - Text on Right Page - Two Page Mode - Portrait Mode",
-                                font=MAIN_FONT, variable=layout, value=1)
-layout_radio2 = tk.Radiobutton(layout_frame, text="Puzzle on Right - Text on Left - Single Page - Landscape Mode",
-                                font=MAIN_FONT, variable=layout, value=2)
-layout_radio3 = tk.Radiobutton(layout_frame, text="Puzzle on Left - Text on Right - Single Page - Landscape Mode",
-                                font=MAIN_FONT, variable=layout, value=3)
-# pack radio buttons into layout frame
-layout_radio4.pack(anchor="nw")
-layout_radio1.pack(anchor="nw")
-layout_radio2.pack(anchor="nw")
-layout_radio3.pack(anchor="nw")
-# place layout frame on main frame
-layout_frame.place(x=175, y=150, width=800)
-# layout radio buttons label
-layout_label = tk.Label(word_puzzle_frame, text="Layout:", font=LABEL_FONT)
-layout_label.place(x=25, y=170)
-
-# separator line
-separator1 = ttk.Separator(word_puzzle_frame)
-separator1.place(x=175, y=150, relwidth=.8)
-
-#--------------------------------Sort Radio Buttons---------------------------------------------------------------------------------------
-# sort variable
-sort_order = tk.IntVar()
-sort_order.set(1)
-
-# sort frame
-sort_frame = tk.Frame(word_puzzle_frame)
-# sort radio buttons
-sort_radio1 = tk.Radiobutton(sort_frame, text="By Name", font=MAIN_FONT, variable=sort_order, value=1)
-sort_radio2 = tk.Radiobutton(sort_frame, text="By ID", font=MAIN_FONT, variable=sort_order, value=2)
-sort_radio3 = tk.Radiobutton(sort_frame, text="By Input Order", font=MAIN_FONT, variable=sort_order, value=3)
-# pack radio buttons into sort frame
-sort_radio1.pack(side="left")
-sort_radio2.pack(side="left")
-sort_radio3.pack(side="left")
-# place sort frame on main frame
-sort_frame.place(x=175, y=265, width=800)
-
-# sort radio buttons label
-sort_label = tk.Label(word_puzzle_frame, text="Sort Order:", font=LABEL_FONT)
-sort_label.place(x=25, y=265)
-
-
-# separator line
-separator2 = ttk.Separator(word_puzzle_frame)
-separator2.place(x=175, y=265, relwidth=.8)
-
-#--------------------------------Word Radio Buttons---------------------------------------------------------------------------------------
-
-#--------------------------------Preferences----------------------------------------------------------------------------------------------
-preferences = {
-    "WORD_COUNT": "10",
-    "PUZ_WIDTH": "20",
-}
-
-# Using StringVar for dynamic updates
-word_count_var = tk.StringVar(value=preferences["WORD_COUNT"])
-puz_width_var = tk.StringVar(value=preferences["PUZ_WIDTH"])
-
-# Frame for preference settings
-preferences_frame = tk.Frame(word_puzzle_frame)
-preferences_frame.place(x=175, y=295, width=800)
-
-# Labels and entries for preferences
-word_count_label = tk.Label(preferences_frame, text="Word Count:", font=MAIN_FONT)
-word_count_label.grid(row=1, column=1, pady=10)
-word_count = tk.Entry(preferences_frame, width=6, textvariable=word_count_var, font=MAIN_FONT)
-word_count.grid(row=1, column=2)
-
-puz_width_label = tk.Label(preferences_frame, text="Puzzle Width:", font=MAIN_FONT)
-puz_width_label.grid(row=2, column=1, pady=10)
-puz_width = tk.Entry(preferences_frame, width=6, textvariable=puz_width_var, font=MAIN_FONT)
-puz_width.grid(row=2, column=2)
-
-
-# Function to apply changes to preferences
-def apply_changes():
-    preferences["WORD_COUNT"] = word_count_var.get()
-    preferences["PUZ_WIDTH"] = puz_width_var.get()
-    print("Updated preferences:", preferences)
-
-# Apply button
-apply_button = tk.Button(preferences_frame, text="Apply Changes", command=apply_changes, font=LABEL_FONT)
-apply_button.grid(row=4, column=1, columnspan=2, pady=10)
-
-# preferences label
-preferences_label = tk.Label(word_puzzle_frame, text="Preferences:", font=LABEL_FONT)
-preferences_label.place(x=25, y=350)
-
-# separator line
-separator3 = ttk.Separator(word_puzzle_frame)
-separator3.place(x=175, y=295, relwidth=.8)
-
-
-#-------------------------------Start Main Frame----------------------------------------------------------------------------------------------
-
 # raise main_frame to start
 main_frame.tkraise()
-
 
 # main gui loop
 root.mainloop()
