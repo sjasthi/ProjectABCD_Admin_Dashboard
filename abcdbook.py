@@ -1,7 +1,6 @@
 import sys, io, requests, threading, webbrowser, urllib, os, platform, openpyxl, string, textwrap, re, time, textstat
-import requests
+import traceback
 import tkinter as tk
-from tkinter import filedialog
 from tkinter import ttk, messagebox
 from pptx import Presentation
 import pptx.util
@@ -15,15 +14,20 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from textblob import TextBlob
 from bs4 import BeautifulSoup
 import wikipediaapi
-import pyttsx3
-from gtts import gTTS
+import openai
+import random
+from xml.dom.expatbuilder import FragmentBuilderNS
+from localspelling import convert_spelling 
+from localspelling.spelling_converter import get_dictionary 
 
 # pip install googletrans
 # pip install googletrans==4.0.0-rc1
 import googletrans
 
+openai.api_key = 'private'
+
 ROOT_WIDTH = 1000 # app window width
-ROOT_HEIGHT = 600 # app window heightF
+ROOT_HEIGHT = 600 # app window height
 
 root = tk.Tk()
 root.title("Project ABCD Admin Panel")
@@ -391,6 +395,7 @@ def add_did_you_know_text(slide, dress_did_you_know, left, top, width, height):
 Add the dress image 
 '''
 def add_image(slide, dress_info, left, top):
+    print(dress_info, flush=True)
     image_width_px = int(pic_width_var.get())
     image_height_px = int(pic_height_var.get())
     image_width_inch = image_width_px / 96
@@ -714,6 +719,7 @@ def generateBook():
     progress_window.destroy() # close progress bar window
 
     openFile(file_name)
+    print(sorted_dress_data)
 
 '''
 Helper function to wrap text
@@ -995,8 +1001,6 @@ def diffReport():
     finally:
         diff_report_button.config(state="normal")
 
-
-
 '''
 Returns 3 google images url and put into excel sheet
 '''
@@ -1176,123 +1180,562 @@ def generateWikiLink():
 
     wiki_link_gen_button.config(state='normal')
 
+'''
+Generates an xcel file with the pairs found
+'''
+def generatePairs():
+    file_path = 'APIData.xlsx'  # Change to the actual file path
+    api_dress_data = sorted(apiRunner(), key=lambda x: x['id'])  # Assuming apiRunner() returns dress data
+    pairs = []
 
-
-'''
-Upload file
-'''
-def uploadFilename():
-    filename = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
-    if filename:
-        text_field_UPLOAD.delete(0, tk.END) 
-        text_field_UPLOAD.insert(0, filename)  
-
-'''
-Play Audio
-'''
-def playAudio():
     try:
-        engine = pyttsx3.init()
-        text = text_field_Description.get("1.0", tk.END)
-        engine.say(text)
-        engine.runAndWait()
-    except Exception as e:
-        messagebox.showerror("Play Audio Error", str(e))
-    
-'''
-Save Audio
-'''
-def saveAudio():
-    try:
-        engine = pyttsx3.init()
-        text = text_field_Description.get("1.0", tk.END)
-        #id = text_field_ID.get()
-        engine.save_to_file(text, f"{text_field_ID.get()}.mp3")
-        engine.runAndWait()
-        messagebox.showinfo("Save Audio", "Audio saved as id.mp3")
-    except Exception as e:
-        messagebox.showerror("Save Audio Error", str(e))
+        # Read dress data from Excel file
+        sheet_dress_data = pd.read_excel(file_path)      
+        sheet_dress_data.dropna(subset=['id'], inplace=True)  # Drop rows with missing IDs
+        sheet_dress_data['description'].fillna('', inplace=True)  # Remove NA/NAN from description column
+        sheet_dress_data['did_you_know'].fillna('', inplace=True)  # Remove NA/NAN from did_you_know column
 
+	# Iterate through API dress data
+        for data_that_will_be_searched in api_dress_data:
+            # Get the name of the current API data ID
+            name = data_that_will_be_searched['name']
+            # Split the name into tokens and remove any prefixes
+            tokens = [token + " " for token in name.split() if token not in ["Dr.", "Mr.", "Mrs.", "Ms."]]
+
+            # Loop through each token
+            for token in tokens:
+                # Loop through provided IDs instead of the entire sheet_dress_data
+                for data_that_contains_token in api_dress_data:
+                    # Get the description and did you know text of the provided ID
+                    description = data_that_contains_token['description']
+                    did_you_know = data_that_contains_token['did_you_know']
+
+                    # Check if the token is present in either of them, make sure we aren't looking on the same IDs
+                    if data_that_will_be_searched['id'] != data_that_contains_token['id']:
+                        if token in description or token in did_you_know:
+                            if (data_that_contains_token['id'], data_that_will_be_searched['id']) not in [(pair[0], pair[2]) for pair in pairs]:
+                                # Add the pair of IDs and names to the list
+                                pairs.append([data_that_contains_token['id'], data_that_contains_token['name'], data_that_will_be_searched['id'], name])
+                            # Break the inner loop as we found a pair for this token
+                            break
+
+        # Generate table and save to Excel
+        column_headers = ['ID1', 'Name 1', 'ID2', 'Name 2']
+        generate_table(pairs, 'generate_pairs', column_headers, 50, 200, 'center', 1)
+        df_pairs = pd.DataFrame(pairs, columns=column_headers)
+        df_pairs.to_excel("pairs_generated.xlsx", index=False)
+        print("Excel file 'pairs_generated.xlsx' created.")
+
+    except FileNotFoundError:
+        print(f"File '{file_path}' not found.")
+    except Exception as e:
+        print(f'Error: {e}')
+
+def generate_us_uk_spellings():
+
+    # new added for 'based on words" functionality
+    from collections import defaultdict
+
+    # Initialize a defaultdict to store dress IDs for each US spelling
+    us_spellings_dict = defaultdict(list)
+
+    file_path = 'APIData.xlsx'  # Change to the actual file path
+    api_dress_data = sorted(apiRunner(), key=lambda x: x['id'])  # Assuming apiRunner() returns dress data
+    words = []
+
+    unique_ids_words_pairs = []
+
+    try:
+        # Read dress data from Excel file
+        sheet_dress_data = pd.read_excel(file_path)      
+        sheet_dress_data.dropna(subset=['id'], inplace=True)  # Drop rows with missing IDs
+        sheet_dress_data['description'].fillna('', inplace=True)  # Remove NA/NAN from description column
+        sheet_dress_data['did_you_know'].fillna('', inplace=True)  # Remove NA/NAN from did_you_know column
+
+	# Iterate through API dress data
+        for api_data in api_dress_data:
+            ID = api_data['id']
+            name = api_data['name']
+            description = api_data['description']
+            did_you_know = api_data['did_you_know']
+
+            # concatenation of description and did_you_know
+            merged_words = f'{str(description)} {str(did_you_know)}'
+            blob = TextBlob(merged_words)
+
+            uk_words = []
+            us_words = []
+            uk_version_of_the_us_words = []
+            same_words_for_both = []
+
+            # Iterate over each word in the text
+            for word in blob.words:
+                # to check if it is us or uk
+                if word in get_dictionary("us").values():
+                    us_words.append(word)
+                    uk_version_of_the_us_words.append(convert_spelling(word, 'gb'))
+
+                    # new added line of code for "based on words" functionality
+                    # Append dress ID to the corresponding US spelling
+                    us_spellings_dict[word].append(ID)
+
+                elif word in get_dictionary("gb").values():
+                    uk_words.append(word)
+                else:
+                    same_words_for_both.append(word)     
+
+            words.append([ID, name, us_words, uk_version_of_the_us_words])
+        #generate_IDs_to_us_spellings(us_spellings_dict)
+        print (generate_IDs_to_us_spellings(us_spellings_dict))
+
+        # Generate table and save to Excel
+        column_headers = ['ID', 'Name', 'US spellings', 'UK spellings']
+        generate_table(words, 'US/UK Spellings', column_headers, 50, 300, 'center', 1)
+        df_pairs = pd.DataFrame(words, columns=column_headers)
+        df_pairs.to_excel("uk_us_spelling.xlsx", index=False)
+        print("Excel file 'uk_us_spelling.xlsx' created.")
+
+    except FileNotFoundError:
+        print(f"File '{file_path}' not found.")
+    except Exception as e:
+        print(f'Error: {e}')
+
+
+# function that accept the us_spelling
+def generate_IDs_to_us_spellings(us_spellings_dict):
+    unique_ids_words_pairs = []
+
+    for word, ids in us_spellings_dict.items():
+        if isinstance(ids, list):  # Check if ids is a list
+            unique_ids = list(set(ids))  # Convert to set to remove duplicates, then back to list
+            # convert the us to uk 
+            uk_word = convert_spelling(word, 'gb')
+            # Create a tuple of word and its unique IDs and append to the list
+            unique_ids_words_pairs.append((word, uk_word, unique_ids))  
+    return unique_ids_words_pairs
+
+'''
+Function to fetch the english text from dress data
+'''
+def fetch_english_text(dress_data):
+    english_texts = {}  
+    for dress in dress_data:
+        dress_id = dress.get('id')
+        english_description = {
+            'name': dress.get('name', ''),
+            'description': dress.get('description', ''),
+            'did_you_know': dress.get('did_you_know', '')
+        }
+        english_texts[dress_id] = english_description
+    return english_texts
+'''
+translation function that stores the translated telugu texts into the same "keys" as the english for easier formatting
+'''
+def translate_text_to_telugu(english_texts):
+    translator = googletrans.Translator()
+    telugu_texts = {}
+
+    for id, texts in english_texts.items():
+        telugu_texts[id] = {}  # Initialize a dictionary for this ID
+        for key, text in texts.items():
+            try:
+                translated = translator.translate(text, dest='te')  # 'te' for Telugu
+                telugu_texts[id][key] = translated.text
+            except Exception as e:
+                print(f"Error translating {key} for ID {id}: {e}")
+                telugu_texts[id][key] = text  # Use the original text if translation fails
+
+    return telugu_texts
+
+
+def read_translated_ids(filename):
+    translated_ids = set()
+    if os.path.exists(filename):
+        with open(filename, 'r') as file:
+            for line in file:
+                translated_ids.add(line.strip())
+    return translated_ids
+
+def write_translated_ids(translated_ids, filename):
+    with open(filename, 'w') as file:
+        for id in translated_ids:
+            file.write(f"{id}\n")
+
+'''
+Performs change of third person text to first person
+'''
+def translate_text_to_first_person(english_texts):
+    i = 1
+    tries = 1
+    sleep_timer = 0
+    first_person_texts = {} # Dictionary to hold the translated text
+    translated_ids_file = 'translated_ids.txt'
+    translated_ids = read_translated_ids(translated_ids_file)
+    print(translated_ids, flush=True)
+
+
+    with open("output.txt", "a") as file: # Opens a text file to write the translated text
+        pass
+
+    messages = [{"role": "system", "content": 
+                 "You translate text from third person to first person."}]
+
+
+    for id, texts in english_texts.items():
+        if str(id) in translated_ids:
+            print(f"ID: {id} was found to be translated already.\n\n", flush=True)
+            continue
+
+        first_person_texts[id] = {}
+        for key, text in texts.items():
+            if key == "description" or key == "did_you_know":
+                try:
+
+                    # Perform conversion from third person to first person using ChatGPT
+                    messages.append(
+                            {"role": "user", "content": f"Convert the following text to first person:\n\n{text}\n\n"}
+                            )
+                    chat = openai.ChatCompletion.create(
+                        model="gpt-3.5-turbo",
+                        messages=messages
+                    )
+                    reply = chat.choices[0].message.content
+                    first_person_texts[id][key] = reply
+
+                    print(f"The ID: {id}\nThe KEY: {key}\nThe TEXT: {text}\nThe REPLY: {reply}\nTries: {tries}\n\n", flush=True)
+                    tries += 1
+                    if tries > 40:
+                        break
+                except Exception as e:
+                    sleep_timer += 1
+                    time.sleep(sleep_timer)
+                    print("\n\nError Occurred: \n", e, flush=True)
+
+                    #first_person_texts[id] = first_person_text.choices[0].text.strip()
+            else:
+                first_person_texts[id][key] = text
+
+        if 'description' in first_person_texts[id] and 'did_you_know' in first_person_texts[id]:
+            translated_ids.add(id)
+            write_translated_ids(translated_ids, translated_ids_file)
+            with open("output.txt", "a") as file:
+                file.write(f"Original text from ID: {id}\n")
+                file.write(f"Description:\n{english_texts[id]['description']}\n")
+                file.write(f"Did You Know:\n{english_texts[id]['did_you_know']}\n\n")
+                file.write(f"First-person text from ID: {id}\n")
+                file.write(f"Description:\n{first_person_texts[id]['description']}\n")
+                file.write(f"Did You Know:\n{first_person_texts[id]['did_you_know']}\n")
+                file.write("======================================================================================\n")
+            print(f"======================\nCharacter {i} Translated\n======================\n", flush=True)
+            i+= 1
+            print(f"Sleeper Timer at: {sleep_timer}", flush=True)
+            print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++", flush=True)
+        if tries > 40:
+            break
+    print("\n\nDONE WITH EVERYTHING\n\n", flush=True)
+    return first_person_texts
+
+'''
+Create powerpoint for first person text
+'''
+def first_person_pptx(first_person_text):
+    try:
+        dress_data = apiRunner() # gather all dress data from api
     
-def SaveAllAudios():
-    update_dress_list = []
-    # get dress numbers from text field
-    get_text_field = text_field.get("1.0", "end-1c").split(',')
+        # sort dress data
+        sorted_dress_data = sortDresses(dress_data)
+
+        # if there is no image in the local folder then download from web
+        if download_imgs.get() == 0:
+            if not os.path.exists('./images'):
+                os.makedirs('./images')
+            if not os.listdir('./images'):
+                text_message = "Local folder is empty. Attempting to grab image(s) from web."
+                duration_num = 4
+                show_error_popup(text_message, duration_num)
+                time.sleep(duration_num+1)
+                imageRunner(sorted_dress_data)
+
+        # download images from web if download images check box is selected
+            # creates directory to save images if one does not exist
+        if not os.path.exists('./images'):
+            os.makedirs('./images')
+        imageRunner(sorted_dress_data) # download images for each dress in list
+        prs = Presentation()
+        ppt_file_name = "fpp.pptx"
+        file_name = "fpp.pptx"
+        count = 0
+        while os.path.exists(file_name):
+            count += 1
+            file_name = f"{os.path.splitext(ppt_file_name)[0]}({count}).pptx"
+
+        progress_window = tk.Toplevel(root)
+        progress_window.title('Creating First Person Pptx')
+        sw = int(progress_window.winfo_screenwidth()/2 - 450/2)
+        sh = int(progress_window.winfo_screenheight()/2 - 70/2)
+        progress_window.geometry(f'450x70+{sw}+{sh}')
+        progress_window.resizable(False, False)
+        progress_window.attributes('-disable', True)
+        progress_window.focus()
+
+        # progress bar custom style
+        pb_style = ttk.Style()
+        pb_style.theme_use('clam')
+        pb_style.configure('green.Horizontal.TProgressbar', foreground='#1ec000', background='#1ec000')
+
+        # frame to hold progress bar
+        pb_frame = tk.Frame(progress_window)
+        pb_frame.pack()
+
+        # progress bar
+        pb = ttk.Progressbar(pb_frame, length=400, style='green.Horizontal.TProgressbar', mode='determinate', maximum=100, value=0)
+        pb.pack(pady=10)
+
+        # label for percent complete
+        percent_label = tk.Label(pb_frame, text='Creating Powerpoint...0%')
+        percent_label.pack()
+        complete = 0
+
+        for id, dress_info in first_person_text.items():
+            dress_data = {'id': id}
+            print("ID", id, flush=True)
+            print("DRESS INFO: ", dress_info, flush=True)
+            dress_name = first_person_text[id].get('name', '')
+            dress_description = first_person_text[id].get('description', '')
+            dress_did_you_know = first_person_text[id].get('did_you_know', '')
+
+            #--------------------------------Portrait--------------------------------
+            # PORTRAIT MODE
+            prs.slide_width = pptx.util.Inches(7.5) # define slide width
+            prs.slide_height = pptx.util.Inches(10.83) # define slide height
+            slide_layout = prs.slide_layouts[5] # use slide with only title
+            slide_layout2 = prs.slide_layouts[6] # use empty slide
+
+            slide_empty = prs.slides.add_slide(slide_layout2) 
+            slide_title = prs.slides.add_slide(slide_layout) 
+
+            add_image(slide_empty, dress_data, 0, 0)
+            #image_width_px = int(pic_width_var.get())
+            #image_height_px = int(pic_height_var.get())
+            #image_width_inch = image_width_px / 96
+            #image_height_inch = image_height_px / 96
+            #picture = slide_title.shapes.add_picture(f'./images/Slide{id}.png', 0, Inches(0.83), Inches(image_width_inch), Inches(image_height_inch))
+            add_title_box(slide_title, dress_name, 0, 0.15, 7.5, 0.91) 
+            add_subtitle_highlight(slide_title, 0.37, 1.58, 2.44, 0.3) # description - highlight box
+            add_description_subtitle(slide_title, 0.28, 1.07, 6.94, 0.51)
+            add_description_text(slide_title, dress_description, 0.28, 1.65, 6.94, 5.99)
+            add_subtitle_highlight(slide_title, 0.37, 8.36, 2.78, 0.3) # did you know - highlight box
+            add_did_you_know_subtitle(slide_title, 0.28, 7.87, 6.94, 0.51)
+            add_did_you_know_text(slide_title, dress_did_you_know, 0.28, 8.46, 6.94, 1.04)
+            #add_numbering(slide_title, dress_info, id, 4.47, 10.06, 1.28, 0.34, 5.94, 10.06, 1.28, 0.34)
+            complete += 1
+            #pb['value'] = (complete/len(first_person_text))*100 # calculate percentage of images downloaded
+            #percent_label.config(text=f'Creating Book...{int(pb["value"])}%')
+            dress_data.clear()
+        prs.save(file_name)
+        openFile(file_name)
+    except Exception as e:
+        traceback.print_exc()
+
+
+"""
+    Create an HTML package with English and Telugu texts.
+    """
+def create_html_package(english_texts, telugu_texts):
+    page = 1
+    html_content = """
+    <html>
+    <head>
+    <style>
+        .name { font-weight: bold; text-align: center; }
+        .did_you_know { margin-top: 20px; font-size: 18px; }
+        .page {
+            page-break-after: always;
+        }
+        @media screen {
+            .page {
+                border-bottom: 1px solid #ccc;
+                padding-bottom: 20px;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+    </head>
+    <body>
+    """
+    for id, english_text in english_texts.items():
+        telugu_text = telugu_texts.get(id, {'name': '', 'description': '', 'did_you_know': ''})
+        html_content += f"<div class='page'><h2>Page No: {page} ABCDid: {id} (English)</h2>"
+        html_content += f"<div class='name'>{english_text['name']}</div>"
+        html_content += f"<p class='description'>{english_text['description']}</p>"
+        html_content += "<div class='did_you_know'>Did you know?</div>"
+        html_content += f"<p>{english_text['did_you_know']}</p></div><hr>"
         
-    # add to list
-    for number in get_text_field:
-        if (number.strip().isnumeric()):
-            update_dress_list.append(int(number.strip()))
+        html_content += f"<div class='page'><h2>Page No: {page} ABCDid: {id} (Telugu)</h2>"
+        html_content += f"<div class='name'>{telugu_text['name']}</div>"
+        html_content += f"<p class='description'>{telugu_text['description']}</p>"
+        html_content += "<div class='did_you_know'>Did you know?</div>"
+        html_content += f"<p>{telugu_text['did_you_know']}</p></div><hr>"
+        page += 1
+    html_content += "</body></html>"
+    return html_content
 
-
-    for num in update_dress_list:
-        print(num)
-        fetchTextAndSaveAudio(num)
-
-def fetchTextAndSaveAudio(id):
-    headers = {
-        'Accept': '*/*',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36'
-    }
-    try:
-        # Replace with the actual API endpoint you're supposed to hit
-        url = f"https://abcd2.projectabcd.com/api/getinfo.php?id={id}"
-        response = requests.get(url, headers=headers)
-        if response.ok:
-            data = response.json()
-            description = data['data']['description']
-            
-            # Convert the description to audio
-            tts = gTTS(description, lang='en')
-            # Save the audio file named as id.mp3
-            audio_file_path = f"{id}.mp3"
-            tts.save(audio_file_path)
-        else:
-            print(f"Failed to fetch data for ID {id}: {response.status_code}, {response.reason}")
-    except Exception as e:
-        print(f"Error fetching data for ID {id}: {e}")
-
-
-'''
-Get Text
-'''
-def fetchText(id):
-    headers = {
-        'Accept': '*/*',  # Use wildcard or specific type based on API requirement
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36'
-    }
-    try:
-        url = f"https://abcd2.projectabcd.com/api/getinfo.php?id={id}"
-        response = requests.get(url, headers=headers)
-        # print("Request Headers:", response.request.headers)
-        if response.ok:
-            # print("API Response:", response.text)
-            data = response.json()
-            # description = data.get("description", "No description found.")
-            description = data['data']['description']
-            text_field_Description.delete(1.0, tk.END)  # This clears all text from the widget
-            root.after(0, lambda: text_field_Description.insert(tk.END, description))
-        else:
-            print("Failed to fetch data:", response.status_code, response.reason)
-            messagebox.showerror("Error", f"Failed to fetch data from the server: {response.reason}, Status Code: {response.status_code}")
-    except Exception as e:
-        print("Error:", str(e))
-        messagebox.showerror("Error", str(e))
-
-'''
-Spins up new thread to run getText function
-'''
-def getTextThread():
+def create_html_package_gpt(english_texts, first_person_texts):
+    page = 1
+    html_content = """
+    <html>
+    <head>
+    <style>
+        .name { font-weight: bold; text-align: center; }
+        .did_you_know { margin-top: 20px; font-size: 18px; }
+        .page {
+            page-break-after: always;
+        }
+        @media screen {
+            .page {
+                border-bottom: 1px solid #ccc;
+                padding-bottom: 20px;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+    </head>
+    <body>
     """
-    Starts a new thread to fetch text based on the dress ID.
-    """
-    dress_id = text_field_ID.get()
-    if dress_id:
-        thread = threading.Thread(target=fetchText, args=(dress_id,))
-        thread.start()
-    else:
-        messagebox.showerror("Error", "Please enter a dress ID.")
+    for id, english_text in english_texts.items():
+        first_person_text = first_person_texts.get(id, {'name': '', 'description': '', 'did_you_know': ''})
+        html_content += f"<div class='page'><h2>Page No: {page} ABCD-id: {id} (English)</h2>"
+        html_content += f"<div class='name'>{english_text['name']}</div>"
+        html_content += f"<div class='description>'>Description</div>"
+        html_content += f"<p>{english_text['description']}</p>"
+        html_content += "<div class='did_you_know'>Did you know?</div>"
+        html_content += f"<p>{english_text['did_you_know']}</p></div><hr>"
+        
+        html_content += f"<div class='page'><h2>Page No: {page} ABCD-id: {id} (ChatGPT)</h2>"
+        html_content += f"<div class='name'>{english_text['name']}</div>"
+        html_content += f"<div class='description>'>Description</div>"
+        html_content += f"<p>{first_person_text['description']}</p>"
+        html_content += "<div class='did_you_know'>Did you know?</div>"
+        html_content += f"<p>{first_person_text['did_you_know']}</p></div><hr>"
+        page += 1
+    html_content += "</body></html>"
+    return html_content
 
+"""
+    Save the HTML content to a file, appending an incrementing number to the filename
+    to avoid overwrites.
+    """
+def save_html_to_file(english_texts, telugu_texts, base_filename="translation_package"):
+    html_filename = f"{base_filename}.html"
+    txt_filename = f"{base_filename}.txt"
+    counter = 1
+    # Check if the file exists and update the filename until it's unique
+    while os.path.exists(html_filename) or os.path.exists(txt_filename):
+        html_filename = f"{base_filename}_{counter}.html"
+        txt_filename = f"{base_filename}_{counter}.txt"
+        counter += 1
+    
+    # Saving HTML content
+    with open(html_filename, 'w', encoding='utf-8') as file:
+        file.write(create_html_package(english_texts, telugu_texts))  # Assuming create_html_package is defined as before
+    
+    # Creating a plain text version of the content
+    text_content = ""
+    for id, english_text in english_texts.items():
+        telugu_text = telugu_texts.get(id, '')
+        text_content += f"English Text for ID {id}\n{english_text}\n\n"
+        text_content += "------------------------------------------------\n\n"
+        text_content += f"Telugu Text for ID {id}\n{telugu_text}\n\n"
+        text_content += "================================================\n\n"
+    
+    # Saving text content
+    with open(txt_filename, 'w', encoding='utf-8') as file:
+        file.write(text_content)
+
+    return html_filename, txt_filename
+
+def save_html_to_file_gpt(english_texts, first_person_texts, base_filename="gpt_adjusted_package"):
+    html_filename = f"{base_filename}.html"
+    txt_filename = f"{base_filename}.txt"
+    counter = 1
+    # Check if the file exists and update the filename until it's unique
+    while os.path.exists(html_filename) or os.path.exists(txt_filename):
+        html_filename = f"{base_filename}_{counter}.html"
+        txt_filename = f"{base_filename}_{counter}.txt"
+        counter += 1
+    
+    # Saving HTML content
+    with open(html_filename, 'w', encoding='utf-8') as file:
+        file.write(create_html_package_gpt(english_texts, first_person_texts))  # Assuming create_html_package is defined as before
+    
+    # Creating a plain text version of the content
+    text_content = ""
+    for id, english_text in english_texts.items():
+        telugu_text = first_person_texts.get(id, '')
+        text_content += f"English Text for ID {id}\n{english_text}\n\n"
+        text_content += "------------------------------------------------\n\n"
+        text_content += f"ChatGPT Text for ID {id}\n{telugu_text}\n\n"
+        text_content += "================================================\n\n"
+    
+    # Saving text content
+    with open(txt_filename, 'w', encoding='utf-8') as file:
+        file.write(text_content)
+
+    return html_filename, txt_filename
+
+def generate_translation_package():
+    # Get ID numbers from text area
+    try:
+
+        dress_data = apiRunner()
+        
+        # Fetch English text
+        english_texts = fetch_english_text(dress_data)
+        
+
+        # Translate to Telugu
+        telugu_texts = translate_text_to_telugu(english_texts)
+        
+        # Create HTML package
+        html_content = create_html_package(english_texts, telugu_texts)
+    
+        
+        # Save HTML and TXT files
+        html_filename, txt_filename = save_html_to_file(english_texts, telugu_texts)
+    
+        
+        # Open the HTML file in a web browser
+        webbrowser.open(f'file://{os.path.realpath(html_filename)}')
+    
+    except FileNotFoundError:
+        print(f"File '{e}' not found.")
+    except Exception as e:
+        print(f'Error: {e}')
+    finally:
+        translation_package_generate_button.config(state='normal')
+        
+        # Optionally, show a message that the file has been saved
+        print("Translation package has been generated and saved.")
+
+
+
+def generate_first_person_package():
+    try:
+
+        dress_data = apiRunner() 
+        english_texts = fetch_english_text(dress_data)
+        first_person_texts = translate_text_to_first_person(english_texts)
+        first_person_pptx(first_person_texts)
+        create_html_package_gpt(english_texts, first_person_texts)
+        html_filename, txt_filename = save_html_to_file_gpt(english_texts, first_person_texts)
+        webbrowser.open(f'file://{os.path.realpath(html_filename)}')
+    except FileNotFoundError:
+        print(f"File '{e}' not found")
+    except Exception as e:
+        print(f'Error: {e}')
+    finally:
+        first_person_generate_button.config(state='normal')
+    print("Translation package has been generated and saved.", flush=True)
 
 
 '''
@@ -1310,23 +1753,6 @@ def startDiffReportThread():
     diff_report_button.config(state='disabled')
     diff_report_thread = threading.Thread(target=diffReport)
     diff_report_thread.start()
-
-'''
-Spins up new thread to run playAudio function
-'''
-def playAudioThread():
-    get_audio_button.config(state='disabled')
-    get_audio_thread = threading.Thread(target=playAudio)
-    get_audio_thread.start()
-
-'''
-Spins up new thread to run saveAudio function
-'''
-def saveAudioThread():
-    get_audio_button.config(state='disabled')
-    get_audio_thread = threading.Thread(target=saveAudio)
-    get_audio_thread.start()
-
 
 '''
 Spins up new thread to run wordAnalysis function
@@ -1351,6 +1777,38 @@ def startGenerateWikiLinkThread():
     wiki_link_gen_button.config(state='disabled')
     wiki_link_thread = threading.Thread(target=generateWikiLink)
     wiki_link_thread.start()
+
+'''
+Spins up new thread to run generatePairs function
+'''
+def startGeneratePairsThread():
+    who_are_my_pairs_gen_button.config(state='disabled')
+    who_are_my_pairs_thread = threading.Thread(target=generatePairs)
+    who_are_my_pairs_thread.start()
+
+'''
+Spins up new thread to run us/uk_spellings function
+'''
+def startUS_UK_SpellingsThread():
+    translation_to_us_spellings_button.config(state="disabled")
+    translation_to_us_spellings_thread = threading.Thread(target=generate_us_uk_spellings)
+    translation_to_us_spellings_thread.start()
+
+'''
+Spins up new thread to run translatepackage function
+'''
+def startTranslationPackageThread():
+    translation_package_generate_button.config(state="disabled")
+    translate_package_thread = threading.Thread(target=generate_translation_package)
+    translate_package_thread.start()
+
+'''
+Spins up new thread to run translate_to_first person function
+'''
+def startFirstPersonThread():
+    first_person_generate_button.config(state="disabled")
+    first_person_thread = threading.Thread(target=generate_first_person_package)
+    first_person_thread.start()
 
 '''
 Launch help site when user clicks Help button
@@ -1395,37 +1853,28 @@ def raiseFrame(frame):
         text_field_label.tkraise()
         text_field.tkraise()
         root.title("Project ABCD Wiki Link")
-    elif frame == 'Get_audio_frame':
-        Get_audio_frame.tkraise()
-        text_field_label_ID_Address.tkraise()
-        # text_field_label_ID_Address.tkraise()
-        text_field_label_Description.tkraise()
-        text_field_Description.tkraise()
-        text_field_ID.tkraise()
-        play_audio_button.tkraise()
-        save_audio_button.tkraise()
-        upload_audio_button.tkraise()
-        get_text_button.tkraise()
-        root.title("Project ABCD Get Audio")
-    elif frame == "all_audio_frame":
-        all_audio_frame.tkraise()
-        all_audio_button.tkraise()
+    elif frame == 'who_are_my_pairs_frame':
+        who_are_my_pairs_frame.tkraise()
         text_field_label.tkraise()
         text_field.tkraise()
-        root.title("Project ABCD Word Analysis")
-    elif frame == "DOB_Analyzer_frame":
-        DOB_Analyzer_frame.tkraise()
-        word_analysis_button.tkraise()
-        word_analysis_back_button.tkraise()
-        text_field_UPLOAD.tkraise()
-        UPLOAD_FILE_button.tkraise()
-        root.title("Project ABCD Word Analysis")
-
-
+        root.title("Project ABCD Who Are My Pairs")
+    elif frame == 'translation_package_frame':  
+        translation_package_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
+        root.title("Project ABCD Translation Package")
+    elif frame == 'first_person_frame':
+        first_person_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
+    elif frame == 'translation_to_us_spellings_frame':
+        translation_to_us_spellings_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
+        root.title("Project ABCD US/UK Spellings")
 
 
 #--------------------------------Main Frame-----------------------------------------------------------------------------------------------
-        
 #-----------------------------------------------------------------------------------------------------------------------------------------
 # configure grid to fill extra space and center
 tk.Grid.rowconfigure(root, 0, weight=1)
@@ -1441,7 +1890,6 @@ main_frame.grid(row=0, column=0, sticky='news')
 title_label = tk.Label(main_frame, text="Project ABCD\nMain Menu",  font=('Arial', 20))
 title_label.pack(pady=100)
 
-
 #--------------------------------Main Buttons-----------------------------------------------------------------------------------------------
 # Create buttons widget
 ## Button settings
@@ -1455,20 +1903,6 @@ button_font_color = "#ffffff"
 ## Generate Book: Gets selected dress from API and import into ppt
 generate_book_button = tk.Button(main_button_frame, text="Generate Book", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('book_gen_frame'))
 generate_book_button.pack(side="left", padx=50)
-
-    
-##Get Audio Frame
-get_audio_button = tk.Button(main_button_frame, text="Get Audio", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('Get_audio_frame'))
-get_audio_button.pack(side="left", padx=50)
-
-
-## get all Audio Frame
-get_all_audio_button = tk.Button(main_button_frame, text="Get All Audio", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('all_audio_frame'))
-get_all_audio_button.pack(side="left", padx=50)
-
-## get DOB Analyzer Frame
-DOB_Analyzer_button = tk.Button(main_button_frame, text="DOB Analyzer", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('DOB_Analyzer_frame'))
-DOB_Analyzer_button.pack(side="left", padx=50)
 
 ## Diff Report: Create a SQL file of dresses that got changed from excel sheet byt comparing to API
 diff_report_button = tk.Button(main_button_frame, text="Difference Report", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('diff_report_frame'))
@@ -1485,9 +1919,28 @@ main_button_frame2.place(relx=.5, rely=.7, anchor='center')
 google_image_button = tk.Button(main_button_frame2, text="Google Image", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('google_image_frame'))
 google_image_button.pack(side="left", padx=50)
 
+## Wiki Link: [FILL IN THE ACTION HERE]
 wiki_link_button = tk.Button(main_button_frame2, text="Wiki Link", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('wiki_link_frame'))
 wiki_link_button.pack(side="left", padx=50)
 
+## My Pairs: Shows pairs when they are searched
+who_are_my_pairs_button = tk.Button(main_button_frame2, text="Who Are My Pairs?", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('who_are_my_pairs_frame'))
+who_are_my_pairs_button.pack(side="left", padx=50)
+
+main_button_frame3 = tk.Frame(main_frame)
+main_button_frame3.place(relx=.5, rely=.9, anchor='center')
+
+## US Spelling: translate us to uk spellings
+us_uk_spelling_button = tk.Button(main_button_frame3, text="US/UK Spellings", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('translation_to_us_spellings_frame'))
+us_uk_spelling_button.pack(side="left", padx=50)
+
+## Generate Book: fetches English text from Api, uses google translate to generate "telugu" text, then creates HTML package with english text on page, and "telugu" text on another.
+translation_package_button = tk.Button(main_button_frame3, text="Translation Package", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('translation_package_frame'))
+translation_package_button.pack(side="left", padx=50)
+
+## First Person: fetches text from api, uses ChatGPT to reword the description and did you know text to first person
+first_person_button = tk.Button(main_button_frame3, text="First Person Conversion", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('first_person_frame'))
+first_person_button.pack(side="left", padx=50)
 
 #--------------------------------Book Gen Frame---------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------------------------
@@ -1739,134 +2192,7 @@ book_gen_back_button.pack(side="left", padx=30)
 book_gen_button_frame.pack(side="bottom", pady=10)
 
 
-
-'''
-    ##Get Audio Frame
-    =============================
-'''
-
-#--------------Get Audio Frame--------------------------------------------------------------------#
-Get_audio_frame = tk.Frame(root, width=1000, height=600)
-Get_audio_frame.pack_propagate(False)
-Get_audio_frame.grid(row=0, column=0, sticky='news')
-
-#button frame
-Get_audio_button_frame = tk.Frame(Get_audio_frame)
-
-#--------------------------------Insert the dress ID-----------------------------------------------------------------------------------------------
-# Input text label 
-text_field_label_ID_Address = tk.Label(root, text="Insert the dress ID", font=LABEL_FONT)
-text_field_label_ID_Address.place(x=25, y=72.5)
-
-# input text field
-text_field_ID = tk.Entry(root)
-text_field_ID.place(x=230, y=60, relwidth=.1, height=50)
-
-text_field_ID = tk.Entry(root)
-text_field_ID.place(x=230, y=60, relwidth=.1, height=50)
-
-# #Get text
-get_text_button = tk.Button(Get_audio_frame, text="get text", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=getTextThread)
-get_text_button.place(x=350, y=60, relwidth=.1, height=50)
-
-#Descript text label
-text_field_label_Description = tk.Label(root, text="Description", font=LABEL_FONT)
-text_field_label_Description.place(x=25, y=200)
-
-# input text field
-text_field_Description = tk.Text(Get_audio_frame)
-text_field_Description.place(x=230, y=170, relwidth=.5, height=300)
-
-
-#play Audio
-play_audio_button = tk.Button(Get_audio_button_frame, text="Play Audio", font=LABEL_FONT, width=18, height=1, bg="#007FFF", fg="#ffffff", command=playAudio)
-play_audio_button.pack(side="left", padx=30)
-
-#Save Audio
-save_audio_button = tk.Button(Get_audio_button_frame, text="Save Audio", font=LABEL_FONT, width=18, height=1, bg="#007FFF", fg="#ffffff", command=saveAudio)
-save_audio_button.pack(side="left", padx=30)
-
-# #upload Audio
-upload_audio_button = tk.Button(Get_audio_button_frame, text="Upload Audio", font=LABEL_FONT, width=18, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
-upload_audio_button.pack(side="left", padx=30)
-
-
-
-# back button
-audio_back_button = tk.Button(Get_audio_button_frame, text="Back", font=LABEL_FONT, width=18, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
-audio_back_button.pack(side="left", padx=30)
- 
-# place button frame on diff report frame
-Get_audio_button_frame.pack(side="bottom", pady=10)
-
-
-'''
-    ##Get All Audio Frame
-    =============================
-'''
-
-#--------------------------------------------------------------------------------------------------------------------------------------------------
-all_audio_frame = tk.Frame(root, width=1000, height=600)
-all_audio_frame.pack_propagate(False)
-all_audio_frame.grid(row=0, column=0, sticky='news')
-
-#--------------------------------get all audios Buttons-----------------------------------------------------------------------------------------------
-# button frame
-all_audio_button_frame = tk.Frame(all_audio_frame)
-
-# word analysis button
-all_audio_button = tk.Button(all_audio_button_frame, text="Save audio", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=SaveAllAudios)
-# back button
-all_audio_back_button = tk.Button(all_audio_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
-# pack buttons into button frame
-all_audio_button.pack(side="left", padx=35)
-all_audio_back_button.pack(side="left", padx=30)
-
-# place button frame on word analysis frame
-all_audio_button_frame.pack(side="bottom", pady=10)
-
-
-'''
-    ##DOB Analayser Frame
-    =============================
-'''
-
-#--------------------------------------------------------------------------------------------------------------------------------------------------
-DOB_Analyzer_frame = tk.Frame(root, width=1000, height=600)
-DOB_Analyzer_frame.pack_propagate(False)
-DOB_Analyzer_frame.grid(row=0, column=0, sticky='news')
-
-#--------------------------------DOB Analayser Buttons-----------------------------------------------------------------------------------------------
-# button frame
-DOB_Analayser_button_frame = tk.Frame(DOB_Analyzer_frame)
-
-
-# Create an Entry widget for displaying the filename
-text_field_UPLOAD = tk.Entry(root)
-text_field_UPLOAD.place(x=230, y=60, relwidth=.3, height=50)
-
-# Create a Button to trigger the file upload
-UPLOAD_FILE_button = tk.Button(root, text="Upload File", command=uploadFilename, bg="#007FFF", fg="#ffffff")
-UPLOAD_FILE_button.place(x=500, y=60, relwidth=.1, height=50)
-
-
-# DOB Analayser report button
-DOB_Analayser_report_button = tk.Button(DOB_Analayser_button_frame, text="Generate HTML", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
-# back button
-DOB_Analayser_back_button = tk.Button(DOB_Analayser_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
-
-# pack buttons into button frame
-DOB_Analayser_report_button.pack(side="left", padx=35)
-DOB_Analayser_back_button.pack(side="left", padx=30)
-
-# place button frame on DOB Analayser report frame
-DOB_Analayser_button_frame.pack(side="bottom", pady=10)
-
-
-'''
-    ##Diff Report Frame
-    =============================
-'''
+#--------------------------------Diff Report Frame-----------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------------------------------------
 diff_report_frame = tk.Frame(root, width=1000, height=600)
 diff_report_frame.pack_propagate(False)
@@ -1875,12 +2201,10 @@ diff_report_frame.grid(row=0, column=0, sticky='news')
 #--------------------------------Diff Report Buttons-----------------------------------------------------------------------------------------------
 # button frame
 diff_report_button_frame = tk.Frame(diff_report_frame)
-
 # difference report button
 diff_report_button = tk.Button(diff_report_button_frame, text="Diff Report", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startDiffReportThread)
 # back button
 diff_back_button = tk.Button(diff_report_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
-
 # pack buttons into button frame
 diff_report_button.pack(side="left", padx=35)
 diff_back_button.pack(side="left", padx=30)
@@ -1889,13 +2213,7 @@ diff_back_button.pack(side="left", padx=30)
 diff_report_button_frame.pack(side="bottom", pady=10)
 
 
-
-
-
-'''
-    ##Word Analysis Frame
-    =============================
-'''
+#--------------------------------Word Analysis Frame-----------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------------------------------------------------------
 word_analysis_frame = tk.Frame(root, width=1000, height=600)
 word_analysis_frame.pack_propagate(False)
@@ -1915,13 +2233,7 @@ word_analysis_back_button.pack(side="left", padx=30)
 # place button frame on word analysis frame
 word_analysis_button_frame.pack(side="bottom", pady=10)
 
-
-
-
-'''
-    ##Google Image Frame
-    =============================
-'''
+#--------------------------------Google Image Frame-----------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------------------------------------------------------
 google_image_frame = tk.Frame(root, width=1000, height=600)
 google_image_frame.pack_propagate(False)
@@ -1955,10 +2267,7 @@ download_google_image_checkbutton.place(x=170, y=150)
 # place button frame on word analysis frame
 google_image_button_frame.pack(side="bottom", pady=10)
 
-'''
-    ##Wiki Link Frame
-    =============================
-'''
+#--------------------------------Wiki Link Frame-----------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------------------------------------
 wiki_link_frame = tk.Frame(root, width=1000, height=600)
 wiki_link_frame.pack_propagate(False)
@@ -1977,6 +2286,93 @@ wiki_link_back_button.pack(side="left", padx=30)
 
 # place button frame on word analysis frame
 wiki_link_gen_button_frame.pack(side="bottom", pady=10)
+
+#--------------------------------Who Are My Pairs Frame-----------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------------------------------------------------------
+who_are_my_pairs_frame = tk.Frame(root, width=1000, height=600)
+who_are_my_pairs_frame.pack_propagate(False)
+who_are_my_pairs_frame.grid(row=0, column=0, sticky='news')
+
+#--------------------------------Who Are My Pairs Buttons-----------------------------------------------------------------------------------
+#button frame
+who_are_my_pairs_gen_button_frame = tk.Frame(who_are_my_pairs_frame)
+
+who_are_my_pairs_gen_button = tk.Button(who_are_my_pairs_gen_button_frame, text="Generate Pairs", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startGeneratePairsThread)
+who_are_my_pairs_back_button = tk.Button(who_are_my_pairs_gen_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+
+# pack button into button frame
+who_are_my_pairs_gen_button.pack(side="left", padx=35)
+who_are_my_pairs_back_button.pack(side="left", padx=30)
+
+# place button frame on word analysis frame?
+who_are_my_pairs_gen_button_frame.pack(side="bottom", pady=10)
+
+#--------------------------------Translation Package Frame-----------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------------------------------------------------------
+translation_package_frame = tk.Frame(root, width=1000, height=600)
+translation_package_frame.pack_propagate(False)
+translation_package_frame.grid(row=0, column=0, sticky='news')
+
+#--------------------------------Translation Package Buttons-----------------------------------------------------------------------------------------------
+# generate button frame
+translation_package_button_frame = tk.Frame(translation_package_frame)
+# generate button
+translation_package_generate_button = tk.Button(translation_package_button_frame, text="Generate", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startTranslationPackageThread)
+# help button
+translation_package_help_button = tk.Button(translation_package_button_frame, text="Help", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=launchHelpSite)
+# upload button
+translation_package_back_button = tk.Button(translation_package_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+# pack buttons into button frame
+translation_package_generate_button.pack(side="left", padx=35)
+translation_package_help_button.pack(side="left")
+translation_package_back_button.pack(side="left", padx=30)
+
+# place button frame on word analysis frame
+translation_package_button_frame.pack(side="bottom", pady=10)
+
+#-------------------------------First Person Frame-------------------------------------------------------------------------------------------
+first_person_frame = tk.Frame(root, width=1000, height=600)
+first_person_frame.pack_propagate(False)
+first_person_frame.grid(row=0, column=0, sticky='news')
+
+#------------------------------------First Person Buttons-------------------------------------------------------------------------------------
+first_person_button_frame = tk.Frame(first_person_frame)
+
+first_person_generate_button = tk.Button(first_person_button_frame, text="Generate", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startFirstPersonThread)
+first_person_back_button = tk.Button(first_person_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+
+# pack buttons into button frame
+first_person_generate_button.pack(side="left", padx=35)
+first_person_back_button.pack(side="left", padx=30)
+
+# place button frame on <something>
+first_person_button_frame.pack(side="bottom", pady=10)
+
+#--------------------------------translation_to_us_spellings Frame-----------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------------------------------------------------------
+translation_to_us_spellings_frame = tk.Frame(root, width=1000, height=600)
+translation_to_us_spellings_frame.pack_propagate(False)
+translation_to_us_spellings_frame.grid(row=0, column=0, sticky='news')
+
+#--------------------------------translation_to_us_spellings Buttons-----------------------------------------------------------------------------------------------
+# button frame
+translation_to_us_spellings_button_frame = tk.Frame(translation_to_us_spellings_frame)
+# US/UK Spellings button - based on dress IDs
+translation_to_us_spellings_button = tk.Button(translation_to_us_spellings_button_frame, text="US/UK Spellings Based on IDs", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startUS_UK_SpellingsThread)
+# US/UK Spellings button - based on words
+translation_to_us_spellings_word_button = tk.Button(translation_to_us_spellings_button_frame, text="US/UK Spellings Based on words", font=LABEL_FONT, width=30, height=1, bg="#007FFF", fg="#ffffff", command=startUS_UK_SpellingsThread)
+
+# back button
+translation_to_us_spellings_back_button = tk.Button(translation_to_us_spellings_button_frame, text="Back", font=LABEL_FONT, width=15, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+# pack buttons into button frame
+translation_to_us_spellings_word_button.pack(side="left", padx=30)
+translation_to_us_spellings_button.pack(side="left", padx=35)
+translation_to_us_spellings_back_button.pack(side="right", padx=30)
+
+# place button frame on word analysis frame
+translation_to_us_spellings_button_frame.pack(side="bottom", pady=10)
+
+#-------------------------------Start Main Frame----------------------------------------------------------------------------------------------
 
 # raise main_frame to start
 main_frame.tkraise()
