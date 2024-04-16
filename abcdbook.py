@@ -21,7 +21,7 @@ import openai
 # pip install googletrans==4.0.0-rc1
 import googletrans
 
-openai.api_key = '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'
+openai.api_key = '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'
 
 ROOT_WIDTH = 1000 # app window width
 ROOT_HEIGHT = 600 # app window height
@@ -63,7 +63,10 @@ except FileNotFoundError:
         "SUBTITLE_SIZE" : "24",
         "SUBTITLE_FONT" : "Arial",
         "PIC_WIDTH" : "720",
-        "PIC_HEIGHT" : "1040"
+        "PIC_HEIGHT" : "1040",
+        "PUZ_WIDTH" : "20",
+        "PUZ_HEIGHT" : "20",
+        "WORD_COUNT": "10"
     }
     tk.messagebox.showwarning(title='Warning', message='No preferences.txt file exists in directory. Default preferences.txt will be created and used.')
     print('No preferences.txt file exists in directory. Default preferences.txt will be created and used.')
@@ -1493,32 +1496,31 @@ def generate_first_person_package():
 
 def wordSearchOpenAi(english_texts):
     words_for_puzzles = {}
-   
+    word_count = int(word_count_var.get())  # Get the current preferred word count
+
     messages = [
-        {"role": "system", "content": "You will extract ten meaningful words significant to the character's text. Do not reply with anything else. Just list the words."}
+        {"role": "system", "content": f"You will extract {word_count} meaningful words significant to the character's text. Do not reply with anything else. Just list the words."}
     ]
 
-    for id, text in english_texts.items():
-        # Append the user's prompt to the messages for each text.
-       
-        messages.append(
-            {"role": "user", "content": f"Can you extract ten words from this character's text that are meaningful and significant to the character, with one being there name? Please only output the ten words.\n\n{text}\n\n"}
-        )
+    #sorted_texts = sort_english_texts(english_texts)  # Sort texts based on preference
 
-        # Perform the task using ChatGPT
+    for id, text in english_texts.items():
+        messages.append(
+            {"role": "user", "content": f"Can you extract {word_count} words from this character's text that are meaningful and significant to the character, with one being their name? Please only output the {word_count} words.\n\n{text}\n\n"}
+        )
+        
         chat_response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=messages
         )
-
        
         reply = chat_response.choices[0].message.content.strip()
         
-        # Store the extracted words for each ID.
         words_for_puzzles[id] = reply
         print(f"This is the Reply for ID {id}: {reply}\n\n")
     
     return words_for_puzzles
+
 
 #function that splits the words and ids, preparing them for puzzle creation
 def wordsearchCreator(words_for_puzzles):
@@ -1526,33 +1528,23 @@ def wordsearchCreator(words_for_puzzles):
     answer_keys = {}  
     word_lists = {}
     for id, words_string in words_for_puzzles.items():
-       
         word_list = words_string.replace(',', '').replace("'", "").upper().split()
-
-        
         word_lists[id] = word_list
-       
-        grid_size = max(len(word) for word in word_list)
-       
-        grid_size += 5 
-        
-       
+        grid_size = int(puz_width_var.get())  # Ensure this is correctly fetched
         grid = [['-' for _ in range(grid_size)] for _ in range(grid_size)]
-        answer_positions = [] 
+        answer_positions = {}
 
         for word in word_list:
-           
-            placed, positions = placeWord(grid, word)
+            placed, positions = placeWord(grid, word)  # This function needs to be adapted to return start and end points too
             if placed:
-                
-                answer_positions.extend(positions)
-        
+                answer_positions[word] = {'start': positions[0], 'end': positions[-1]}
+
         fillEmptySpots(grid)
-        
         puzzles[id] = grid
-        answer_keys[id] = answer_positions 
+        answer_keys[id] = answer_positions
     
     return puzzles, answer_keys, word_lists
+
 
 #function to randomly place words in the grid
 def placeWord(grid, word):
@@ -1628,15 +1620,10 @@ def createWordsearchWordsHtml(puzzles, answer_keys, word_lists):
             page-break-after: always;
             margin-bottom: 20px;
         }
-        @media screen {
-            .page {
-                border-bottom: 1px solid #ccc;
-                padding-bottom: 20px;
-            }
-        }
         table {
             border-collapse: collapse;
             margin: 20px 0;
+            position: relative;
         }
         td {
             border: 1px solid #666;
@@ -1645,20 +1632,34 @@ def createWordsearchWordsHtml(puzzles, answer_keys, word_lists):
             text-align: center;
             vertical-align: middle;
         }
-        .highlight {
-            color: red; /* Highlight color for answer key */
-            font-weight: bold;
+        .highlighted {
+            font-weight: bold;  /* Make the text bold */
+            color: black;  /* Ensure the text is black */
         }
-        ul {
-            list-style-type: none; /* Removes bullets from the list */
-            padding: 0;
+        .answer-line {
+            position: absolute;
+            stroke: red;
+            stroke-width: 2;
+            marker-end: url(#arrowhead);
         }
-        li {
-            margin: 5px 0; /* Adds some spacing between list items */
+        .svg-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;  /* Allows clicks to pass through to the table */
         }
     </style>
     </head>
     <body>
+    <svg style="display:none;">
+        <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="red" />
+            </marker>
+        </defs>
+    </svg>
     """
 
     # Generate regular puzzles with word lists
@@ -1669,33 +1670,46 @@ def createWordsearchWordsHtml(puzzles, answer_keys, word_lists):
             for cell in row:
                 html_content += f"<td>{cell}</td>"
             html_content += "</tr>"
-        html_content += "</table>"
-        
-        # Print the word list in a column below the puzzle
-        html_content += f"<div><strong>Words:</strong><ul>"
+        html_content += "</table><div><strong>Words:</strong><ul>"
         for word in word_lists[id]:
             html_content += f"<li>{word}</li>"
         html_content += "</ul></div></div>"
-        
         page += 1
 
-    # Generate answer key puzzles
+    # Generate answer key puzzles and draw SVG lines directly for each word
     for id, positions in answer_keys.items():
-        grid = puzzles[id] 
-        html_content += f"<div class='page'><h2>Answer Key Page No: {page} - Puzzle ID: {id}</h2><table>"
+        grid = puzzles[id]
+        html_content += f"<div class='page'><h2>Answer Key Page No: {page} - Puzzle ID: {id}</h2><div style='position: relative;'>"
+        html_content += "<table>"
         for row_idx, row in enumerate(grid):
             html_content += "<tr>"
             for col_idx, cell in enumerate(row):
                 if (row_idx, col_idx) in positions:
-                    html_content += f"<td class='highlight'>{cell}</td>"
+                    html_content += f"<td class='highlighted'>{cell}</td>"
                 else:
                     html_content += f"<td>{cell}</td>"
             html_content += "</tr>"
-        html_content += "</table></div>"
+        html_content += "</table>"
+
+        # SVG overlay for drawing lines
+        html_content += "<div class='svg-container'><svg style='width: 100%; height: 100%;'>"
+        for word, pos in positions.items():
+            start = pos['start']
+            end = pos['end']
+            start_x = start[1] * 20 + 10
+            start_y = start[0] * 20 + 10
+            end_x = end[1] * 20 + 10
+            end_y = end[0] * 20 + 10
+            html_content += f"<line x1='{start_x}' y1='{start_y}' x2='{end_x}' y2='{end_y}' class='answer-line'></line>"
+        html_content += "</svg></div></div>"
         page += 1
 
     html_content += "</body></html>"
     return html_content
+
+
+
+
 
 
 
@@ -1721,44 +1735,74 @@ def save_and_display_html(html_content, base_filename="puzzles_package"):
     except Exception as e:
         print(f"Failed to open the HTML file in a web browser. Error: {e}")
         
-#function that creates the tables to be used for the slides.       
-def add_puzzle_table(slide, grid, title_text, answer_positions=None):
+from pptx.util import Inches, Pt
+from pptx.enum.shapes import MSO_SHAPE
+from pptx.dml.color import RGBColor
+from pptx.enum.shapes import MSO_CONNECTOR
+
+
+def add_puzzle_table(slide, grid, word_list, title_text, answer_positions=None):
     title = slide.shapes.title
     title.text = title_text
 
     rows, cols = len(grid), len(grid[0])
-    table = slide.shapes.add_table(rows + 1, cols, Inches(1), Inches(1.5), Inches(8), Inches(5.5)).table  
+    grid_origin_x = Inches(1)  # Left margin for the grid
+    grid_origin_y = Inches(1.5)  # Top margin for the grid
+    max_width = Inches(6)  # Total available width for the grid
+    max_height = Inches(4.5)  # Total available height for the grid
+    cell_width = max_width / cols
+    cell_height = max_height / rows
+
+    # Add the grid table
+    table = slide.shapes.add_table(rows, cols, grid_origin_x, grid_origin_y, round(cell_width * cols), round(cell_height * rows)).table
     table.first_row = False
-    table.horz_banding = False
-    table.vert_banding = False
 
     for r in range(rows):
         for c in range(cols):
             cell = table.cell(r, c)
             cell.text = grid[r][c]
-            if answer_positions and (r, c) in answer_positions:
-                cell.text_frame.paragraphs[0].font.color.rgb = RGBColor(255, 0, 0)  
+            cell.text_frame.paragraphs[0].font.size = Pt(10)
             cell.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+
+    # Add lines for correct answers
+    if answer_positions:
+        for word, pos in answer_positions.items():
+            start_cell = pos['start']
+            end_cell = pos['end']
+            start_x = grid_origin_x + start_cell[1] * cell_width + cell_width / 2
+            start_y = grid_origin_y + start_cell[0] * cell_height + cell_height / 2
+            end_x = grid_origin_x + end_cell[1] * cell_width + cell_width / 2
+            end_y = grid_origin_y + end_cell[0] * cell_height + cell_height / 2
+
+            line = slide.shapes.add_shape(MSO_SHAPE.LINE_INVERSE, start_x, start_y, end_x, end_y)
+            line.line.width = Pt(2)
+            line.line.color.rgb = RGBColor(255, 0, 0)  # Set line color to red
+
+    # Add word list to the side
+    textbox = slide.shapes.add_textbox(Inches(7.5), Inches(1.5), Inches(2), Inches(4))
+    tf = textbox.text_frame
+    p = tf.add_paragraph()
+    p.text = "Words to find:\n" + "\n".join(word_list)
+    p.font.bold = True
+    p.font.size = Pt(14)
+
+
 
 def make_powerpoint(puzzles, answer_keys, word_lists):
     prs = Presentation()
-    
-    # Create slides for all regular puzzles
     for id, grid in puzzles.items():
-        slide = prs.slides.add_slide(prs.slide_layouts[5])
-        add_puzzle_table(slide, grid, f"Puzzle ID: {id}")
-        words_slide = prs.slides.add_slide(prs.slide_layouts[5])
-        words_text = "\n".join(word_lists[id])  # Word list in a column
-        textbox = words_slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(5.5))
-        textbox.text = f"Words to find for Puzzle ID: {id}:\n{words_text}"
+        slide = prs.slides.add_slide(prs.slide_layouts[5])  # Use a blank layout
+        add_puzzle_table(slide, grid, word_lists[id], f"Puzzle ID: {id}")
 
-    # Create slides for all answer keys, highlighting answers
+    # Add a slide for each answer key
     for id, positions in answer_keys.items():
-        answer_grid = puzzles[id] 
-        slide = prs.slides.add_slide(prs.slide_layouts[5])
-        add_puzzle_table(slide, answer_grid, f"Answer Key ID: {id}", answer_positions=positions)
+        slide = prs.slides.add_slide(prs.slide_layouts[5])  # Use a blank layout
+        add_puzzle_table(slide, puzzles[id], word_lists[id], f"Answer Key ID: {id}", answer_positions=positions)
 
     return prs
+
+
+
 
 def save_powerpoint(prs, base_filename="puzzles_package"):
     filename = f"{base_filename}.pptx"
@@ -2082,6 +2126,7 @@ sort_frame.place(x=175, y=265, width=800)
 # sort radio buttons label
 sort_label = tk.Label(book_gen_frame, text="Sort Order:", font=LABEL_FONT)
 sort_label.place(x=25, y=265)
+
 
 # separator line
 separator2 = ttk.Separator(book_gen_frame)
@@ -2428,6 +2473,119 @@ word_puzzle_back_button.pack(side="left", padx=30)
 
 # place button frame on <something>
 word_puzzle_button_frame.pack(side="bottom", pady=10)
+
+#--------------------------------Layout Radio Buttons-------------------------------------------------------------------------------------
+# layout variable
+layout = tk.IntVar()
+layout.set(4)
+
+# layout frame
+layout_frame = tk.Frame(word_puzzle_frame)
+# layout radio buttons
+layout_radio4 = tk.Radiobutton(layout_frame, text="Puzzle on Left - Text on right - Single Page - Portrait Mode",
+                                font=MAIN_FONT, variable=layout, value=4)
+layout_radio1 = tk.Radiobutton(layout_frame, text="Puzzle on Left Page - Text on Right Page - Two Page Mode - Portrait Mode",
+                                font=MAIN_FONT, variable=layout, value=1)
+layout_radio2 = tk.Radiobutton(layout_frame, text="Puzzle on Right - Text on Left - Single Page - Landscape Mode",
+                                font=MAIN_FONT, variable=layout, value=2)
+layout_radio3 = tk.Radiobutton(layout_frame, text="Puzzle on Left - Text on Right - Single Page - Landscape Mode",
+                                font=MAIN_FONT, variable=layout, value=3)
+# pack radio buttons into layout frame
+layout_radio4.pack(anchor="nw")
+layout_radio1.pack(anchor="nw")
+layout_radio2.pack(anchor="nw")
+layout_radio3.pack(anchor="nw")
+# place layout frame on main frame
+layout_frame.place(x=175, y=150, width=800)
+# layout radio buttons label
+layout_label = tk.Label(word_puzzle_frame, text="Layout:", font=LABEL_FONT)
+layout_label.place(x=25, y=170)
+
+# separator line
+separator1 = ttk.Separator(word_puzzle_frame)
+separator1.place(x=175, y=150, relwidth=.8)
+
+#--------------------------------Sort Radio Buttons---------------------------------------------------------------------------------------
+# sort variable
+sort_order = tk.IntVar()
+sort_order.set(1)
+
+# sort frame
+sort_frame = tk.Frame(word_puzzle_frame)
+# sort radio buttons
+sort_radio1 = tk.Radiobutton(sort_frame, text="By Name", font=MAIN_FONT, variable=sort_order, value=1)
+sort_radio2 = tk.Radiobutton(sort_frame, text="By ID", font=MAIN_FONT, variable=sort_order, value=2)
+sort_radio3 = tk.Radiobutton(sort_frame, text="By Input Order", font=MAIN_FONT, variable=sort_order, value=3)
+# pack radio buttons into sort frame
+sort_radio1.pack(side="left")
+sort_radio2.pack(side="left")
+sort_radio3.pack(side="left")
+# place sort frame on main frame
+sort_frame.place(x=175, y=265, width=800)
+
+# sort radio buttons label
+sort_label = tk.Label(word_puzzle_frame, text="Sort Order:", font=LABEL_FONT)
+sort_label.place(x=25, y=265)
+
+
+# separator line
+separator2 = ttk.Separator(word_puzzle_frame)
+separator2.place(x=175, y=265, relwidth=.8)
+
+#--------------------------------Word Radio Buttons---------------------------------------------------------------------------------------
+
+#--------------------------------Preferences----------------------------------------------------------------------------------------------
+preferences = {
+    "WORD_COUNT": "10",
+    "PUZ_WIDTH": "20",
+    "PUZ_HEIGHT": "20"
+}
+
+word_count_var = tk.StringVar()
+puz_width_var = tk.StringVar()
+puz_height_var = tk.StringVar()
+
+# Set initial values for the Entry fields
+word_count_var.set(preferences["WORD_COUNT"])
+puz_width_var.set(preferences["PUZ_WIDTH"])
+puz_height_var.set(preferences["PUZ_HEIGHT"])
+
+# preferences frame
+preferences_frame = tk.Frame(word_puzzle_frame)
+# preferences labels and entry fields
+word_count_label = tk.Label(preferences_frame, text="Word Count:", font=MAIN_FONT)
+word_count = tk.Entry(preferences_frame, width=6, textvariable=word_count_var, state="disabled",  font=MAIN_FONT)
+
+pic_width_label = tk.Label(preferences_frame, text="Pic Width:", font=MAIN_FONT)
+pic_width = tk.Entry(preferences_frame, width=6, textvariable=pic_width_var, state="disabled",  font=MAIN_FONT)
+
+pic_height_label = tk.Label(preferences_frame, text="Pic Height:", font=MAIN_FONT)
+pic_height = tk.Entry(preferences_frame, width=6, textvariable=pic_height_var, state="disabled",  font=MAIN_FONT)
+
+# grid preference labels and entry fields into preferences frame
+# column 1 + 2
+
+word_count_label.grid(row=1, column =1, pady =10)
+word_count.grid(row =1, column =2)
+
+# column 5 + 6
+pic_width_label.grid(row=2, column=1)
+pic_width.grid(row=2, column=2)
+
+pic_height_label.grid(row=3, column=1, padx=10)
+pic_height.grid(row=3, column=2)
+
+# place preferences frame on main frame
+preferences_frame.place(x=175, y=295, width=800)
+
+# preferences label
+preferences_label = tk.Label(word_puzzle_frame, text="Preferences:", font=LABEL_FONT)
+preferences_label.place(x=25, y=350)
+
+# separator line
+separator3 = ttk.Separator(word_puzzle_frame)
+separator3.place(x=175, y=295, relwidth=.8)
+
 
 #-------------------------------Start Main Frame----------------------------------------------------------------------------------------------
 
