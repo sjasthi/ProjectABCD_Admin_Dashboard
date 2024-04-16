@@ -1746,9 +1746,9 @@ def add_puzzle_table(slide, grid, word_list, title_text, answer_positions=None):
     title.text = title_text
 
     rows, cols = len(grid), len(grid[0])
-    grid_origin_x = Inches(1)  # Left margin for the grid
-    grid_origin_y = Inches(1.5)  # Top margin for the grid
-    max_width = Inches(6)  # Total available width for the grid
+    grid_origin_x = Inches(1)  
+    grid_origin_y = Inches(1.5)  
+    max_width = Inches(6)  
     max_height = Inches(4.5)  # Total available height for the grid
     cell_width = max_width / cols
     cell_height = max_height / rows
@@ -2538,45 +2538,37 @@ separator2.place(x=175, y=265, relwidth=.8)
 preferences = {
     "WORD_COUNT": "10",
     "PUZ_WIDTH": "20",
-    "PUZ_HEIGHT": "20"
 }
 
-word_count_var = tk.StringVar()
-puz_width_var = tk.StringVar()
-puz_height_var = tk.StringVar()
+# Using StringVar for dynamic updates
+word_count_var = tk.StringVar(value=preferences["WORD_COUNT"])
+puz_width_var = tk.StringVar(value=preferences["PUZ_WIDTH"])
 
-# Set initial values for the Entry fields
-word_count_var.set(preferences["WORD_COUNT"])
-puz_width_var.set(preferences["PUZ_WIDTH"])
-puz_height_var.set(preferences["PUZ_HEIGHT"])
-
-# preferences frame
+# Frame for preference settings
 preferences_frame = tk.Frame(word_puzzle_frame)
-# preferences labels and entry fields
-word_count_label = tk.Label(preferences_frame, text="Word Count:", font=MAIN_FONT)
-word_count = tk.Entry(preferences_frame, width=6, textvariable=word_count_var, state="disabled",  font=MAIN_FONT)
-
-pic_width_label = tk.Label(preferences_frame, text="Pic Width:", font=MAIN_FONT)
-pic_width = tk.Entry(preferences_frame, width=6, textvariable=pic_width_var, state="disabled",  font=MAIN_FONT)
-
-pic_height_label = tk.Label(preferences_frame, text="Pic Height:", font=MAIN_FONT)
-pic_height = tk.Entry(preferences_frame, width=6, textvariable=pic_height_var, state="disabled",  font=MAIN_FONT)
-
-# grid preference labels and entry fields into preferences frame
-# column 1 + 2
-
-word_count_label.grid(row=1, column =1, pady =10)
-word_count.grid(row =1, column =2)
-
-# column 5 + 6
-pic_width_label.grid(row=2, column=1)
-pic_width.grid(row=2, column=2)
-
-pic_height_label.grid(row=3, column=1, padx=10)
-pic_height.grid(row=3, column=2)
-
-# place preferences frame on main frame
 preferences_frame.place(x=175, y=295, width=800)
+
+# Labels and entries for preferences
+word_count_label = tk.Label(preferences_frame, text="Word Count:", font=MAIN_FONT)
+word_count_label.grid(row=1, column=1, pady=10)
+word_count = tk.Entry(preferences_frame, width=6, textvariable=word_count_var, font=MAIN_FONT)
+word_count.grid(row=1, column=2)
+
+puz_width_label = tk.Label(preferences_frame, text="Puzzle Width:", font=MAIN_FONT)
+puz_width_label.grid(row=2, column=1, pady=10)
+puz_width = tk.Entry(preferences_frame, width=6, textvariable=puz_width_var, font=MAIN_FONT)
+puz_width.grid(row=2, column=2)
+
+
+# Function to apply changes to preferences
+def apply_changes():
+    preferences["WORD_COUNT"] = word_count_var.get()
+    preferences["PUZ_WIDTH"] = puz_width_var.get()
+    print("Updated preferences:", preferences)
+
+# Apply button
+apply_button = tk.Button(preferences_frame, text="Apply Changes", command=apply_changes, font=LABEL_FONT)
+apply_button.grid(row=4, column=1, columnspan=2, pady=10)
 
 # preferences label
 preferences_label = tk.Label(word_puzzle_frame, text="Preferences:", font=LABEL_FONT)
