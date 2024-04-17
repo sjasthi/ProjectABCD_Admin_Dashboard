@@ -25,3 +25,6 @@ python -m textblob.download_corpora
 
 -- Textstat --
 pip install textstat
+
+-- OpenAI --
+pip install openai==0.27.7
