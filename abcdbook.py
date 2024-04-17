@@ -1236,18 +1236,9 @@ def generatePairs():
         print(f'Error: {e}')
 
 def generate_us_uk_spellings():
-
-    # new added for 'based on words" functionality
-    from collections import defaultdict
-
-    # Initialize a defaultdict to store dress IDs for each US spelling
-    us_spellings_dict = defaultdict(list)
-
     file_path = 'APIData.xlsx'  # Change to the actual file path
     api_dress_data = sorted(apiRunner(), key=lambda x: x['id'])  # Assuming apiRunner() returns dress data
     words = []
-
-    unique_ids_words_pairs = []
 
     try:
         # Read dress data from Excel file
@@ -1279,44 +1270,96 @@ def generate_us_uk_spellings():
                     us_words.append(word)
                     uk_version_of_the_us_words.append(convert_spelling(word, 'gb'))
 
-                    # new added line of code for "based on words" functionality
-                    # Append dress ID to the corresponding US spelling
-                    us_spellings_dict[word].append(ID)
-
                 elif word in get_dictionary("gb").values():
                     uk_words.append(word)
                 else:
                     same_words_for_both.append(word)     
 
             words.append([ID, name, us_words, uk_version_of_the_us_words])
-        #generate_IDs_to_us_spellings(us_spellings_dict)
-        print (generate_IDs_to_us_spellings(us_spellings_dict))
 
         # Generate table and save to Excel
         column_headers = ['ID', 'Name', 'US spellings', 'UK spellings']
-        generate_table(words, 'US/UK Spellings', column_headers, 50, 300, 'center', 1)
+        generate_table(words, 'US_UK Spellings', column_headers, 50, 300, 'center', 1)
         df_pairs = pd.DataFrame(words, columns=column_headers)
-        df_pairs.to_excel("uk_us_spelling.xlsx", index=False)
-        print("Excel file 'uk_us_spelling.xlsx' created.")
+        df_pairs.to_excel("US_UK_Spelling.xlsx", index=False)
+        print("Excel file 'US_UK_Spelling.xlsx' created.")
 
     except FileNotFoundError:
         print(f"File '{file_path}' not found.")
     except Exception as e:
         print(f'Error: {e}')
 
+# ids_of_us_uk spelling function
+def generate_IDs_Of_us_uk_spellings():
 
-# function that accept the us_spelling
-def generate_IDs_to_us_spellings(us_spellings_dict):
-    unique_ids_words_pairs = []
+    from collections import defaultdict
 
-    for word, ids in us_spellings_dict.items():
-        if isinstance(ids, list):  # Check if ids is a list
+    file_path = 'APIData.xlsx'  # Change to the actual file path
+    api_dress_data = sorted(apiRunner(), key=lambda x: x['id'])  # Assuming apiRunner() returns dress data
+    # Initialize a defaultdict to store dress IDs for each US spelling
+    us_spellings_dict = defaultdict(lambda: {'ids': []})
+
+    try:
+        # Read dress data from Excel file
+        sheet_dress_data = pd.read_excel(file_path)      
+        sheet_dress_data.dropna(subset=['id'], inplace=True)  # Drop rows with missing IDs
+        sheet_dress_data['description'].fillna('', inplace=True)  # Remove NA/NAN from description column
+        sheet_dress_data['did_you_know'].fillna('', inplace=True)  # Remove NA/NAN from did_you_know column
+
+        unique_ids_words_pairs = []  # Initialize an empty list to store the lists
+
+        for api_data in api_dress_data:
+            ID = api_data['id']
+            description = api_data['description']
+            did_you_know = api_data['did_you_know']
+
+            # Concatenation of description and did_you_know
+            merged_words = f'{str(description)} {str(did_you_know)}'
+            blob = TextBlob(merged_words)
+
+            uk_words = []
+            us_words = []
+            uk_version_of_the_us_words = []
+            same_words_for_both = []
+
+            # Iterate over each word in the text
+            for word in blob.words:
+                # to check if it is us or uk
+                if word in get_dictionary("us").values():
+                    us_words.append(word)
+                    uk_version_of_the_us_words.append(convert_spelling(word, 'gb'))
+
+                    # Append dress ID to the corresponding US spelling
+                    us_spellings_dict[word]['ids'].append(ID)
+
+                elif word in get_dictionary("gb").values():
+                    uk_words.append(word)
+                else:
+                    same_words_for_both.append(word)
+
+        # Create the list of unique_ids_words_pairs
+        for us_word, data in us_spellings_dict.items():
+            ids = data['ids']
             unique_ids = list(set(ids))  # Convert to set to remove duplicates, then back to list
-            # convert the us to uk 
-            uk_word = convert_spelling(word, 'gb')
-            # Create a tuple of word and its unique IDs and append to the list
-            unique_ids_words_pairs.append((word, uk_word, unique_ids))  
-    return unique_ids_words_pairs
+            uk_word = convert_spelling(us_word, 'gb')
+            
+            # Create a new list with the US word, UK spelling, and unique IDs
+            pair = [us_word, uk_word, unique_ids]
+            
+            # Append the list to the list
+            unique_ids_words_pairs.append(pair)
+
+        # Generate table and save to Excel
+        column_headers = ['US', 'UK', 'IDS']
+        generate_table(unique_ids_words_pairs, 'IDS_OF_US_UK Spellings', column_headers, 50, 300, 'center', 1)
+        df_pairs = pd.DataFrame(unique_ids_words_pairs, columns=column_headers)
+        df_pairs.to_excel("IDS_OF_US_UK Spellings.xlsx", index=False)
+        print("Excel file 'IDS_OF_US_UK Spellings.xlsx' created.")
+
+    except FileNotFoundError:
+        print(f"File '{file_path}' not found.")
+    except Exception as e:
+        print(f'Error: {e}')
 
 '''
 Function to fetch the english text from dress data
@@ -2256,9 +2299,18 @@ def startGeneratePairsThread():
 Spins up new thread to run us/uk_spellings function
 '''
 def startUS_UK_SpellingsThread():
-    translation_to_us_spellings_button.config(state="disabled")
-    translation_to_us_spellings_thread = threading.Thread(target=generate_us_uk_spellings)
-    translation_to_us_spellings_thread.start()
+    us_uk_spellings_button.config(state="disabled")
+    us_uk_spellings_thread = threading.Thread(target=generate_us_uk_spellings)
+    us_uk_spellings_thread.start()
+
+'''
+Spins up new thread to run ids of us/uk_spellings function
+'''
+def startIDs_Of_US_UK_SpellingsThread():
+    ids_of_us_uk_spellings_button.config(state="disabled")
+    ids_of_us_uk_spellings_thread = threading.Thread(target=generate_IDs_Of_us_uk_spellings)
+    ids_of_us_uk_spellings_thread.start()
+
 
 '''
 Spins up new thread to run translatepackage function
@@ -2357,11 +2409,16 @@ def raiseFrame(frame):
         first_person_frame.tkraise()
         text_field_label.tkraise()
         text_field.tkraise()
-    elif frame == 'translation_to_us_spellings_frame':
-        translation_to_us_spellings_frame.tkraise()
+    elif frame == 'us_uk_spellings_frame':
+        us_uk_spellings_frame.tkraise()
         text_field_label.tkraise()
         text_field.tkraise()
         root.title("Project ABCD US/UK Spellings")
+    elif frame == 'ids_of_us_uk_spellings_frame':
+        ids_of_us_uk_spellings_frame.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
+        root.title("Project ABCD IDs_Of_US/UK Spellings")
     elif frame == 'Get_audio_frame':
         Get_audio_frame.tkraise()
         text_field_label_ID_Address.tkraise()
@@ -2448,9 +2505,13 @@ who_are_my_pairs_button.pack(side="left", padx=50)
 main_button_frame3 = tk.Frame(main_frame)
 main_button_frame3.place(relx=.5, rely=.75, anchor='center')
 
-## US Spelling: translate us to uk spellings
-us_uk_spelling_button = tk.Button(main_button_frame3, text="US/UK Spellings", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('translation_to_us_spellings_frame'))
-us_uk_spelling_button.pack(side="left", padx=50)
+## US Spelling: us_uk spellings
+us_uk_spellings_button = tk.Button(main_button_frame3, text="US/UK Spellings", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('us_uk_spellings_frame'))
+us_uk_spellings_button.pack(side="left", padx=50)
+
+## IDS OF US Spelling: ids of us_uk spellings
+ids_of_us_uk_spellings_button = tk.Button(main_button_frame3, text="IDS OF US/UK Spellings", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('ids_of_us_uk_spellings_frame'))
+ids_of_us_uk_spellings_button.pack(side="left", padx=50)
 
 ## Generate Book: fetches English text from Api, uses google translate to generate "telugu" text, then creates HTML package with english text on page, and "telugu" text on another.
 translation_package_button = tk.Button(main_button_frame3, text="Translation Package", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('translation_package_frame'))
@@ -2885,29 +2946,47 @@ first_person_back_button.pack(side="left", padx=30)
 # place button frame on <something>
 first_person_button_frame.pack(side="bottom", pady=10)
 
-#--------------------------------translation_to_us_spellings Frame-----------------------------------------------------------------------------------------------
+#--------------------------------us_uk_spellings Frame-----------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------------------------------------------------------
-translation_to_us_spellings_frame = tk.Frame(root, width=1000, height=600)
-translation_to_us_spellings_frame.pack_propagate(False)
-translation_to_us_spellings_frame.grid(row=0, column=0, sticky='news')
+us_uk_spellings_frame = tk.Frame(root, width=1000, height=600)
+us_uk_spellings_frame.pack_propagate(False)
+us_uk_spellings_frame.grid(row=0, column=0, sticky='news')
 
-#--------------------------------translation_to_us_spellings Buttons-----------------------------------------------------------------------------------------------
-# button frame
-translation_to_us_spellings_button_frame = tk.Frame(translation_to_us_spellings_frame)
+#--------------------------------us_uk_spellings Buttons-----------------------------------------------------------------------------------------------
+# button frame - 
+us_uk_spellings_button_frame = tk.Frame(us_uk_spellings_frame)
 # US/UK Spellings button - based on dress IDs
-translation_to_us_spellings_button = tk.Button(translation_to_us_spellings_button_frame, text="US/UK Spellings Based on IDs", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startUS_UK_SpellingsThread)
-# US/UK Spellings button - based on words
-translation_to_us_spellings_word_button = tk.Button(translation_to_us_spellings_button_frame, text="US/UK Spellings Based on words", font=LABEL_FONT, width=30, height=1, bg="#007FFF", fg="#ffffff", command=startUS_UK_SpellingsThread)
+us_uk_spellings_button = tk.Button(us_uk_spellings_button_frame, text="US/UK Spellings Based on IDs", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startUS_UK_SpellingsThread)
 
 # back button
-translation_to_us_spellings_back_button = tk.Button(translation_to_us_spellings_button_frame, text="Back", font=LABEL_FONT, width=15, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
-# pack buttons into button frame
-translation_to_us_spellings_word_button.pack(side="left", padx=30)
-translation_to_us_spellings_button.pack(side="left", padx=35)
-translation_to_us_spellings_back_button.pack(side="right", padx=30)
+us_uk_spellings_back_button = tk.Button(us_uk_spellings_button_frame, text="Back", font=LABEL_FONT, width=15, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+us_uk_spellings_back_button.pack(side="right", padx=30)
+# pack buttons into button frame - us_uk_spellings
+us_uk_spellings_button.pack(side="left", padx=35)
 
-# place button frame on word analysis frame
-translation_to_us_spellings_button_frame.pack(side="bottom", pady=10)
+# place button frame on us uk spellings 
+us_uk_spellings_button_frame.pack(side="bottom", pady=10)
+
+#--------------------------------ids_of_us_uk_spellings Frame-----------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------------------------------------------------------
+ids_of_us_uk_spellings_frame = tk.Frame(root, width=1000, height=600)
+ids_of_us_uk_spellings_frame.pack_propagate(False)
+ids_of_us_uk_spellings_frame.grid(row=0, column=0, sticky='news')
+
+#--------------------------------ids_of_us_uk_spellings Buttons-----------------------------------------------------------------------------------------------
+# button frame - 
+ids_of_us_uk_spellings_button_frame = tk.Frame(us_uk_spellings_frame)
+# IDS OF US/UK Spellings button
+ids_of_us_uk_spellings_button = tk.Button(ids_of_us_uk_spellings_button_frame, text="IDS OF US/UK Spellings", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startIDs_Of_US_UK_SpellingsThread)
+
+# back button
+ids_of_us_uk_spellings_back_button = tk.Button(ids_of_us_uk_spellings_button_frame, text="Back", font=LABEL_FONT, width=15, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+ids_of_us_uk_spellings_back_button.pack(side="right", padx=30)
+# pack buttons into button frame - ids_of_us_uk_spellings
+ids_of_us_uk_spellings_button.pack(side="left", padx=35)
+
+# place button frame on us uk spellings 
+ids_of_us_uk_spellings_button_frame.pack(side="bottom", pady=10)
 
 '''
     ##Get Audio Frame
