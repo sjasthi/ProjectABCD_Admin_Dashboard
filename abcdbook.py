@@ -28,7 +28,7 @@ from tkinter import filedialog
 # pip install googletrans==4.0.0-rc1
 import googletrans
 
-openai.api_key = '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'
+openai.api_key = 'private'
 
 ROOT_WIDTH = 1000 # app window width
 ROOT_HEIGHT = 600 # app window height
@@ -1583,6 +1583,7 @@ def first_person_pptx(first_person_text):
             dress_data.clear()
         prs.save(file_name)
         openFile(file_name)
+        progress_window.destroy()
     except Exception as e:
         traceback.print_exc()
 
@@ -2456,7 +2457,7 @@ tk.Grid.rowconfigure(root, 0, weight=1)
 tk.Grid.columnconfigure(root, 0, weight=1)
 
 # main frame
-main_frame = tk.Frame(root, width=1000, height=600)
+main_frame = tk.Frame(root, width=1000, height=1000)
 main_frame.pack_propagate(False)
 main_frame.grid(row=0, column=0, sticky='news')
 
@@ -2469,7 +2470,7 @@ title_label.pack(pady=100)
 # Create buttons widget
 ## Button settings
 main_button_frame = tk.Frame(main_frame)
-main_button_frame.place(relx=.5, rely=.45, anchor='center')
+main_button_frame.place(relx=.5, rely=.35, anchor='center')
 button_width = 20
 button_height = 3
 button_bgd_color = "#007FFF"
@@ -2488,7 +2489,7 @@ word_analysis_report_button = tk.Button(main_button_frame, text="Word Analysis R
 word_analysis_report_button.pack(side="left", padx=50)
 
 main_button_frame2 = tk.Frame(main_frame)
-main_button_frame2.place(relx=.5, rely=.60, anchor='center')
+main_button_frame2.place(relx=.5, rely=.50, anchor='center')
 
 ## Google Images: Create an Excel file with 3 image links to the selected dresses
 google_image_button = tk.Button(main_button_frame2, text="Google Image", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('google_image_frame'))
@@ -2503,10 +2504,10 @@ who_are_my_pairs_button = tk.Button(main_button_frame2, text="Who Are My Pairs?"
 who_are_my_pairs_button.pack(side="left", padx=50)
 
 main_button_frame3 = tk.Frame(main_frame)
-main_button_frame3.place(relx=.5, rely=.75, anchor='center')
+main_button_frame3.place(relx=.5, rely=.65, anchor='center')
 
 ## US Spelling: us_uk spellings
-us_uk_spellings_button = tk.Button(main_button_frame2, text="US/UK Spellings", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('us_uk_spellings_frame'))
+us_uk_spellings_button = tk.Button(main_button_frame3, text="US/UK Spellings", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('us_uk_spellings_frame'))
 us_uk_spellings_button.pack(side="left", padx=50)
 
 ## IDS OF US Spelling: ids of us_uk spellings
@@ -2517,29 +2518,32 @@ ids_of_us_uk_spellings_button.pack(side="left", padx=50)
 translation_package_button = tk.Button(main_button_frame3, text="Translation Package", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('translation_package_frame'))
 translation_package_button.pack(side="left", padx=50)
 
+main_button_frame4 = tk.Frame(main_frame)
+main_button_frame4.place(relx=.5, rely=.80, anchor='center')
+
 ## First Person: fetches text from api, uses ChatGPT to reword the description and did you know text to first person
-first_person_button = tk.Button(main_button_frame3, text="First Person Conversion", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('first_person_frame'))
+first_person_button = tk.Button(main_button_frame4, text="First Person Conversion", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('first_person_frame'))
 first_person_button.pack(side="left", padx=50)
 
-main_button_frame4 = tk.Frame(main_frame)
-main_button_frame4.place(relx=.5, rely=.90, anchor='center')
+## Word Puzzle: generates and creates crossword puzzles based of words in character descriptions
+word_puzzle_button = tk.Button(main_button_frame4, text="Word Puzzle Creator", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('word_puzzle_frame'))
+word_puzzle_button.pack(side="left", padx=50)
+
+main_button_frame5 = tk.Frame(main_frame)
+main_button_frame5.place(relx =.5, rely=.95, anchor='center')
 
 ##Get Audio Frame
-get_audio_button = tk.Button(main_button_frame4, text="Get Audio", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('Get_audio_frame'))
+get_audio_button = tk.Button(main_button_frame5, text="Get Audio", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('Get_audio_frame'))
 get_audio_button.pack(side="left", padx=50)
 
-
 ## get all Audio Frame
-get_all_audio_button = tk.Button(main_button_frame4, text="Get All Audio", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('all_audio_frame'))
+get_all_audio_button = tk.Button(main_button_frame5, text="Get All Audio", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('all_audio_frame'))
 get_all_audio_button.pack(side="left", padx=50)
 
 ## get DOB Analyzer Frame
 DOB_Analyzer_button = tk.Button(main_button_frame4, text="DOB Analyzer", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('DOB_Analyzer_frame'))
 DOB_Analyzer_button.pack(side="left", padx=50)
 
-## Word Puzzle: generates and creates crossword puzzles based of words in character descriptions
-word_puzzle_button = tk.Button(main_button_frame3, text="Word Puzzle Creator", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('word_puzzle_frame'))
-word_puzzle_button.pack(side="left", padx=50)
 #--------------------------------Book Gen Frame---------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------------------------
 # book gen frame
