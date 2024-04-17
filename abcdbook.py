@@ -2476,6 +2476,9 @@ get_all_audio_button.pack(side="left", padx=50)
 DOB_Analyzer_button = tk.Button(main_button_frame4, text="DOB Analyzer", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('DOB_Analyzer_frame'))
 DOB_Analyzer_button.pack(side="left", padx=50)
 
+## Word Puzzle: generates and creates crossword puzzles based of words in character descriptions
+word_puzzle_button = tk.Button(main_button_frame3, text="Word Puzzle Creator", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('word_puzzle_frame'))
+word_puzzle_button.pack(side="left", padx=50)
 #--------------------------------Book Gen Frame---------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------------------------
 # book gen frame
