@@ -2506,7 +2506,7 @@ main_button_frame3 = tk.Frame(main_frame)
 main_button_frame3.place(relx=.5, rely=.75, anchor='center')
 
 ## US Spelling: us_uk spellings
-us_uk_spellings_button = tk.Button(main_button_frame3, text="US/UK Spellings", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('us_uk_spellings_frame'))
+us_uk_spellings_button = tk.Button(main_button_frame2, text="US/UK Spellings", font=LABEL_FONT, width=button_width, height=button_height, bg=button_bgd_color, fg=button_font_color, command=lambda: raiseFrame('us_uk_spellings_frame'))
 us_uk_spellings_button.pack(side="left", padx=50)
 
 ## IDS OF US Spelling: ids of us_uk spellings
@@ -2956,7 +2956,7 @@ us_uk_spellings_frame.grid(row=0, column=0, sticky='news')
 # button frame - 
 us_uk_spellings_button_frame = tk.Frame(us_uk_spellings_frame)
 # US/UK Spellings button - based on dress IDs
-us_uk_spellings_button = tk.Button(us_uk_spellings_button_frame, text="US/UK Spellings Based on IDs", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startUS_UK_SpellingsThread)
+us_uk_spellings_button = tk.Button(us_uk_spellings_button_frame, text="US/UK Spellings", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startUS_UK_SpellingsThread)
 
 # back button
 us_uk_spellings_back_button = tk.Button(us_uk_spellings_button_frame, text="Back", font=LABEL_FONT, width=15, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
@@ -2975,7 +2975,7 @@ ids_of_us_uk_spellings_frame.grid(row=0, column=0, sticky='news')
 
 #--------------------------------ids_of_us_uk_spellings Buttons-----------------------------------------------------------------------------------------------
 # button frame - 
-ids_of_us_uk_spellings_button_frame = tk.Frame(us_uk_spellings_frame)
+ids_of_us_uk_spellings_button_frame = tk.Frame(ids_of_us_uk_spellings_frame)
 # IDS OF US/UK Spellings button
 ids_of_us_uk_spellings_button = tk.Button(ids_of_us_uk_spellings_button_frame, text="IDS OF US/UK Spellings", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=startIDs_Of_US_UK_SpellingsThread)
 
