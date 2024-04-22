@@ -28,7 +28,7 @@ from tkinter import filedialog
 # pip install googletrans==4.0.0-rc1
 import googletrans
 
-openai.api_key = 'private'
+openai.api_key = 'priavte'
 
 ROOT_WIDTH = 1000 # app window width
 ROOT_HEIGHT = 600 # app window height
