@@ -32,7 +32,7 @@ from tkinter import filedialog
 # pip install googletrans==4.0.0-rc1
 import googletrans
 
-openai.api_key = 'priavte'
+openai.api_key = 'private'
 
 ROOT_WIDTH = 1000 # app window width
 ROOT_HEIGHT = 600 # app window height
@@ -1557,30 +1557,41 @@ def first_person_pptx(first_person_text):
             dress_description = first_person_text[id].get('description', '')
             dress_did_you_know = first_person_text[id].get('did_you_know', '')
 
+            dress_description_len = len(dress_description)
+
+
+
             #--------------------------------Portrait--------------------------------
-            # PORTRAIT MODE
             prs.slide_width = pptx.util.Inches(7.5) # define slide width
             prs.slide_height = pptx.util.Inches(10.83) # define slide height
             slide_layout = prs.slide_layouts[5] # use slide with only title
             slide_layout2 = prs.slide_layouts[6] # use empty slide
 
-            slide_empty = prs.slides.add_slide(slide_layout2) 
             slide_title = prs.slides.add_slide(slide_layout) 
 
-            add_image(slide_empty, dress_data, 0, 0)
-            #image_width_px = int(pic_width_var.get())
-            #image_height_px = int(pic_height_var.get())
-            #image_width_inch = image_width_px / 96
-            #image_height_inch = image_height_px / 96
-            #picture = slide_title.shapes.add_picture(f'./images/Slide{id}.png', 0, Inches(0.83), Inches(image_width_inch), Inches(image_height_inch))
-            add_title_box(slide_title, dress_name, 0, 0.15, 7.5, 0.91) 
-            add_subtitle_highlight(slide_title, 0.37, 1.58, 2.44, 0.3) # description - highlight box
-            add_description_subtitle(slide_title, 0.28, 1.07, 6.94, 0.51)
-            add_description_text(slide_title, dress_description, 0.28, 1.65, 6.94, 5.99)
-            add_subtitle_highlight(slide_title, 0.37, 8.36, 2.78, 0.3) # did you know - highlight box
-            add_did_you_know_subtitle(slide_title, 0.28, 7.87, 6.94, 0.51)
-            add_did_you_know_text(slide_title, dress_did_you_know, 0.28, 8.46, 6.94, 1.04)
-            #add_numbering(slide_title, dress_info, id, 4.47, 10.06, 1.28, 0.34, 5.94, 10.06, 1.28, 0.34)
+            add_image(slide_title, dress_data, 0, 1.39)
+            add_title_box(slide_title, dress_name, 0, 0.09, 7.5, 0.91) 
+            add_subtitle_highlight(slide_title, 3.71, 1.21, 1.83, 0.23) # description - highlight box
+            add_description_subtitle(slide_title, 3.63, 0.88, 3.71, 0.37)
+            add_description_text(slide_title, dress_description, 3.63, 1.35, 3.71, 7.57)
+
+                # adjust the text height based on text length
+            if dress_description_len < 600:
+                add_subtitle_highlight(slide_title, 3.72, 5.83, 1.83, 0.23) # did you know - highlight box
+                add_did_you_know_subtitle(slide_title, 3.63, 5.42, 3.71, 0.37)
+                add_did_you_know_text(slide_title, dress_did_you_know, 3.63, 5.94, 3.71, 0.91)
+
+            elif dress_description_len > 600 and dress_description_len < 1300:
+                add_subtitle_highlight(slide_title, 3.72, 7.99, 1.83, 0.23) # did you know - highlight box
+                add_did_you_know_subtitle(slide_title, 3.63, 7.58, 3.71, 0.37)
+                add_did_you_know_text(slide_title, dress_did_you_know, 3.63, 8.1, 3.71, 0.91)
+                
+            else:
+                add_subtitle_highlight(slide_title, 3.72, 9.32, 1.83, 0.23) # did you know - highlight box
+                add_did_you_know_subtitle(slide_title, 3.63, 8.91, 3.71, 0.37)
+                add_did_you_know_text(slide_title, dress_did_you_know, 3.63, 9.43, 3.71, 0.91)
+
+            #add_numbering(slide_title, dress_info, id, 0.49, 6.46, 1.33, 0.27, 1.95, 6.46, 1.33, 0.27)
             complete += 1
             #pb['value'] = (complete/len(first_person_text))*100 # calculate percentage of images downloaded
             #percent_label.config(text=f'Creating Book...{int(pb["value"])}%')
