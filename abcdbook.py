@@ -21,8 +21,19 @@ from localspelling import convert_spelling
 from localspelling.spelling_converter import get_dictionary 
 import requests
 import pyttsx3
+import webbrowser
+import tempfile
+import datetime
 from gtts import gTTS
+
 from tkinter import filedialog
+from pptx.util import Inches, Pt
+from pptx.enum.text import PP_ALIGN
+from pptx.dml.color import RGBColor
+from pptx import Presentation
+from pptx.enum.shapes import MSO_CONNECTOR
+from pptx.shapes.connector import Connector
+from pptx.enum.shapes import MSO_SHAPE 
 
 # pip install googletrans
 # pip install googletrans==4.0.0-rc1
@@ -1553,30 +1564,41 @@ def first_person_pptx(first_person_text):
             dress_description = first_person_text[id].get('description', '')
             dress_did_you_know = first_person_text[id].get('did_you_know', '')
 
+            dress_description_len = len(dress_description)
+
+
+
             #--------------------------------Portrait--------------------------------
-            # PORTRAIT MODE
             prs.slide_width = pptx.util.Inches(7.5) # define slide width
             prs.slide_height = pptx.util.Inches(10.83) # define slide height
             slide_layout = prs.slide_layouts[5] # use slide with only title
             slide_layout2 = prs.slide_layouts[6] # use empty slide
 
-            slide_empty = prs.slides.add_slide(slide_layout2) 
             slide_title = prs.slides.add_slide(slide_layout) 
 
-            add_image(slide_empty, dress_data, 0, 0)
-            #image_width_px = int(pic_width_var.get())
-            #image_height_px = int(pic_height_var.get())
-            #image_width_inch = image_width_px / 96
-            #image_height_inch = image_height_px / 96
-            #picture = slide_title.shapes.add_picture(f'./images/Slide{id}.png', 0, Inches(0.83), Inches(image_width_inch), Inches(image_height_inch))
-            add_title_box(slide_title, dress_name, 0, 0.15, 7.5, 0.91) 
-            add_subtitle_highlight(slide_title, 0.37, 1.58, 2.44, 0.3) # description - highlight box
-            add_description_subtitle(slide_title, 0.28, 1.07, 6.94, 0.51)
-            add_description_text(slide_title, dress_description, 0.28, 1.65, 6.94, 5.99)
-            add_subtitle_highlight(slide_title, 0.37, 8.36, 2.78, 0.3) # did you know - highlight box
-            add_did_you_know_subtitle(slide_title, 0.28, 7.87, 6.94, 0.51)
-            add_did_you_know_text(slide_title, dress_did_you_know, 0.28, 8.46, 6.94, 1.04)
-            #add_numbering(slide_title, dress_info, id, 4.47, 10.06, 1.28, 0.34, 5.94, 10.06, 1.28, 0.34)
+            add_image(slide_title, dress_data, 0, 1.39)
+            add_title_box(slide_title, dress_name, 0, 0.09, 7.5, 0.91) 
+            add_subtitle_highlight(slide_title, 3.71, 1.21, 1.83, 0.23) # description - highlight box
+            add_description_subtitle(slide_title, 3.63, 0.88, 3.71, 0.37)
+            add_description_text(slide_title, dress_description, 3.63, 1.35, 3.71, 7.57)
+
+                # adjust the text height based on text length
+            if dress_description_len < 600:
+                add_subtitle_highlight(slide_title, 3.72, 5.83, 1.83, 0.23) # did you know - highlight box
+                add_did_you_know_subtitle(slide_title, 3.63, 5.42, 3.71, 0.37)
+                add_did_you_know_text(slide_title, dress_did_you_know, 3.63, 5.94, 3.71, 0.91)
+
+            elif dress_description_len > 600 and dress_description_len < 1300:
+                add_subtitle_highlight(slide_title, 3.72, 7.99, 1.83, 0.23) # did you know - highlight box
+                add_did_you_know_subtitle(slide_title, 3.63, 7.58, 3.71, 0.37)
+                add_did_you_know_text(slide_title, dress_did_you_know, 3.63, 8.1, 3.71, 0.91)
+                
+            else:
+                add_subtitle_highlight(slide_title, 3.72, 9.32, 1.83, 0.23) # did you know - highlight box
+                add_did_you_know_subtitle(slide_title, 3.63, 8.91, 3.71, 0.37)
+                add_did_you_know_text(slide_title, dress_did_you_know, 3.63, 9.43, 3.71, 0.91)
+
+            #add_numbering(slide_title, dress_info, id, 0.49, 6.46, 1.33, 0.27, 1.95, 6.46, 1.33, 0.27)
             complete += 1
             #pb['value'] = (complete/len(first_person_text))*100 # calculate percentage of images downloaded
             #percent_label.config(text=f'Creating Book...{int(pb["value"])}%')
@@ -1823,20 +1845,22 @@ def wordsearchCreator(words_for_puzzles):
     for id, words_string in words_for_puzzles.items():
         word_list = words_string.replace(',', '').replace("'", "").upper().split()
         word_lists[id] = word_list
-        grid_size = int(puz_width_var.get())  # Ensure this is correctly fetched
+        grid_size = int(puz_width_var.get())  # Get grid size
         grid = [['-' for _ in range(grid_size)] for _ in range(grid_size)]
         answer_positions = {}
 
         for word in word_list:
-            placed, positions = placeWord(grid, word)  # This function needs to be adapted to return start and end points too
+            placed, positions = placeWord(grid, word)
             if placed:
-                answer_positions[word] = {'start': positions[0], 'end': positions[-1]}
+                # Store all positions, not just start and end
+                answer_positions[word] = positions
 
         fillEmptySpots(grid)
         puzzles[id] = grid
         answer_keys[id] = answer_positions
     
     return puzzles, answer_keys, word_lists
+
 
 
 #function to randomly place words in the grid
@@ -1917,6 +1941,7 @@ def createWordsearchWordsHtml(puzzles, answer_keys, word_lists):
             border-collapse: collapse;
             margin: 20px 0;
             position: relative;
+            border: 1px solid red; /* Temporary for alignment checking */
         }
         td {
             border: 1px solid #666;
@@ -1924,38 +1949,19 @@ def createWordsearchWordsHtml(puzzles, answer_keys, word_lists):
             height: 20px;
             text-align: center;
             vertical-align: middle;
+            box-sizing: border-box;
+            color: black; /* Default text color */
         }
-        .highlighted {
-            font-weight: bold;  /* Make the text bold */
-            color: black;  /* Ensure the text is black */
-        }
-        .answer-line {
-            position: absolute;
-            stroke: red;
-            stroke-width: 2;
-            marker-end: url(#arrowhead);
-        }
-        .svg-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;  /* Allows clicks to pass through to the table */
+        .answer-text {
+            color: blue; /* Change the text color to blue */
+            font-weight: bold; /* Make answer text bold */
         }
     </style>
     </head>
     <body>
-    <svg style="display:none;">
-        <defs>
-            <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
-                <path d="M0,0 L0,6 L9,3 z" fill="red" />
-            </marker>
-        </defs>
-    </svg>
     """
 
-    # Generate regular puzzles with word lists
+    # Regular puzzles and word lists
     for id, grid in puzzles.items():
         html_content += f"<div class='page'><h2>Page No: {page} - Puzzle ID: {id}</h2><table>"
         for row in grid:
@@ -1969,37 +1975,25 @@ def createWordsearchWordsHtml(puzzles, answer_keys, word_lists):
         html_content += "</ul></div></div>"
         page += 1
 
-    # Generate answer key puzzles and draw SVG lines directly for each word
+    # Answer key puzzles with text color change for answers only
     for id, positions in answer_keys.items():
         grid = puzzles[id]
-        html_content += f"<div class='page'><h2>Answer Key Page No: {page} - Puzzle ID: {id}</h2><div style='position: relative;'>"
-        html_content += "<table>"
+        html_content += f"<div class='page'><h2>Answer Key Page No: {page} - Puzzle ID: {id}</h2><table>"
+        flat_positions = set(sum(positions.values(), []))  # Flatten list of tuples from all words into a set for quick lookup
         for row_idx, row in enumerate(grid):
             html_content += "<tr>"
             for col_idx, cell in enumerate(row):
-                if (row_idx, col_idx) in positions:
-                    html_content += f"<td class='highlighted'>{cell}</td>"
+                # Apply the 'answer-text' class if the cell position is in the flat list of answer positions
+                if (row_idx, col_idx) in flat_positions:
+                    html_content += f"<td class='answer-text'>{cell}</td>"
                 else:
                     html_content += f"<td>{cell}</td>"
             html_content += "</tr>"
-        html_content += "</table>"
-
-        # SVG overlay for drawing lines
-        html_content += "<div class='svg-container'><svg style='width: 100%; height: 100%;'>"
-        for word, pos in positions.items():
-            start = pos['start']
-            end = pos['end']
-            start_x = start[1] * 20 + 10
-            start_y = start[0] * 20 + 10
-            end_x = end[1] * 20 + 10
-            end_y = end[0] * 20 + 10
-            html_content += f"<line x1='{start_x}' y1='{start_y}' x2='{end_x}' y2='{end_y}' class='answer-line'></line>"
-        html_content += "</svg></div></div>"
+        html_content += "</table></div>"
         page += 1
 
     html_content += "</body></html>"
     return html_content
-
 
 
 
@@ -2028,21 +2022,15 @@ def save_and_display_html(html_content, base_filename="puzzles_package"):
     except Exception as e:
         print(f"Failed to open the HTML file in a web browser. Error: {e}")
         
-from pptx.util import Inches, Pt
-from pptx.enum.shapes import MSO_SHAPE
-from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_CONNECTOR
-
-
-def add_puzzle_table(slide, grid, word_list, title_text, answer_positions=None):
+def add_puzzle_table(slide, grid, word_list, title_text, max_width, max_height, answer_positions=None):
     title = slide.shapes.title
     title.text = title_text
 
     rows, cols = len(grid), len(grid[0])
-    grid_origin_x = Inches(1)  
-    grid_origin_y = Inches(1.5)  
-    max_width = Inches(6)  
-    max_height = Inches(4.5)  # Total available height for the grid
+    grid_origin_x = Inches(1)
+    grid_origin_y = Inches(1.5)
+
+    # Calculate the cell width and height based on the max dimensions provided
     cell_width = max_width / cols
     cell_height = max_height / rows
 
@@ -2054,22 +2042,27 @@ def add_puzzle_table(slide, grid, word_list, title_text, answer_positions=None):
         for c in range(cols):
             cell = table.cell(r, c)
             cell.text = grid[r][c]
-            cell.text_frame.paragraphs[0].font.size = Pt(10)
-            cell.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+            p = cell.text_frame.paragraphs[0]
+            p.font.size = Pt(10)  # Adjust this based on space available
+            p.alignment = PP_ALIGN.CENTER
+            if answer_positions and any((r, c) in positions for positions in answer_positions.values()):
+                p.font.color.rgb = RGBColor(255, 0, 0)  # Red for answer cells 
 
-    # Add lines for correct answers
+    # Add lines for correct answers using direct line drawing
     if answer_positions:
-        for word, pos in answer_positions.items():
-            start_cell = pos['start']
-            end_cell = pos['end']
-            start_x = grid_origin_x + start_cell[1] * cell_width + cell_width / 2
-            start_y = grid_origin_y + start_cell[0] * cell_height + cell_height / 2
-            end_x = grid_origin_x + end_cell[1] * cell_width + cell_width / 2
-            end_y = grid_origin_y + end_cell[0] * cell_height + cell_height / 2
+        for positions in answer_positions.values():
+            for i in range(len(positions)-1):
+                start_cell = positions[i]
+                end_cell = positions[i+1]
+                start_x = grid_origin_x + start_cell[1] * cell_width + cell_width / 2
+                start_y = grid_origin_y + start_cell[0] * cell_height + cell_height / 2
+                end_x = grid_origin_x + end_cell[1] * cell_width + cell_width / 2
+                end_y = grid_origin_y + end_cell[0] * cell_height + cell_height / 2
 
-            line = slide.shapes.add_shape(MSO_SHAPE.LINE_INVERSE, start_x, start_y, end_x, end_y)
-            line.line.width = Pt(2)
-            line.line.color.rgb = RGBColor(255, 0, 0)  # Set line color to red
+                # Draw direct lines instead of using connectors
+                line = slide.shapes.add_shape(MSO_SHAPE.LINE_INVERSE, start_x, start_y, end_x - start_x, end_y - start_y)
+                line.line.width = Pt(2)
+                line.line.color.rgb = RGBColor(255, 0, 0)  # Set line color to red
 
     # Add word list to the side
     textbox = slide.shapes.add_textbox(Inches(7.5), Inches(1.5), Inches(2), Inches(4))
@@ -2081,18 +2074,23 @@ def add_puzzle_table(slide, grid, word_list, title_text, answer_positions=None):
 
 
 
+
 def make_powerpoint(puzzles, answer_keys, word_lists):
     prs = Presentation()
-    for id, grid in puzzles.items():
-        slide = prs.slides.add_slide(prs.slide_layouts[5])  # Use a blank layout
-        add_puzzle_table(slide, grid, word_lists[id], f"Puzzle ID: {id}")
+    max_width = Inches(6)  # Set the maximum width for the grid
+    max_height = Inches(4.5)  # Set the maximum height for the grid
 
-    # Add a slide for each answer key
+    for id, grid in puzzles.items():
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
+        add_puzzle_table(slide, grid, word_lists[id], f"Puzzle ID: {id}", max_width, max_height)
+
     for id, positions in answer_keys.items():
-        slide = prs.slides.add_slide(prs.slide_layouts[5])  # Use a blank layout
-        add_puzzle_table(slide, puzzles[id], word_lists[id], f"Answer Key ID: {id}", answer_positions=positions)
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
+        add_puzzle_table(slide, puzzles[id], word_lists[id], f"Answer Key ID: {id}", max_width, max_height, answer_positions=positions)
 
     return prs
+
+
 
 
 
@@ -2137,14 +2135,87 @@ def generate_word_search_package():
     save_powerpoint(prs, base_filename="word_puzzles_package")
     print("PowerPoint word puzzles have been generated and saved.")
 
+
+
+
+
+
 '''
-Upload File
+    ##DOB Analayser Methods
 '''
-def uploadFilename():
-    filename = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
-    if filename:
-        text_field_UPLOAD.delete(0, tk.END) 
-        text_field_UPLOAD.insert(0, filename)
+def parse_dates(dates):
+    if pd.isna(dates) or dates.strip() in ["TBD", "Unknown", "Not Applicable", ""]:
+        # print(f"Skipping date parsing due to non-date info: {dates}")
+        return None, None
+
+    # Normalize and clean the date string
+    dates = dates.replace('(', '').replace(')', '').replace('circa', '').replace('c.', '').replace('around', '').strip()
+    dates = dates.replace(' – ', '-').replace(' to ', '-').replace('–', '-').replace('/', '-')
+
+    # Split and strip the date parts
+    try:
+        split_dates = [date.strip() for date in dates.split('-') if date.strip()]
+        birth_date = parse_single_date(split_dates[0])
+        death_date = parse_single_date(split_dates[1]) if len(split_dates) > 1 else None
+    except Exception as e:
+        return None, None
+
+    return birth_date, death_date
+
+def parse_single_date(date_str):
+    try:
+        return datetime.datetime.strptime(date_str, '%d %B %Y').date()
+    except ValueError:
+        try:
+            return datetime.datetime.strptime(date_str, '%B %d, %Y').date()
+        except ValueError:
+            return None
+
+def calculate_life_span(birth_date, death_date):
+    if not birth_date:
+        return "Birth date unknown"
+    if not death_date:
+        return "Still living"  # Or adjust according to your preference
+    try:
+        life_span = death_date.year - birth_date.year
+        life_span -= ((death_date.month, death_date.day) < (birth_date.month, birth_date.day))
+        return life_span
+    except Exception as e:
+        return ""
+
+def load_data(file_path):
+    data = pd.read_excel(file_path)
+    data['Parsed Dates'] = data['Dates'].apply(parse_dates)
+    data[['Date of Birth', 'Date of Death']] = pd.DataFrame(data['Parsed Dates'].tolist(), index=data.index)
+    data['Life Span'] = data.apply(lambda row: calculate_life_span(row['Date of Birth'], row['Date of Death']), axis=1)
+    return data[['name', 'abcd_id', 'Date of Birth', 'Date of Death', 'Life Span']]
+
+def upload_file():
+    file_path = filedialog.askopenfilename()
+    if file_path:
+        global data_frame
+        data_frame = load_data(file_path)
+        print("File uploaded and processed successfully.")
+
+def generate_html():
+    if data_frame.empty:
+        # print("No data to display.")
+        return
+    html_content = '<html><head><title>Excel Data</title>'
+    html_content += '<script src="https://code.jquery.com/jquery-3.5.1.js"></script>'
+    html_content += '<script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>'
+    html_content += '<link rel="stylesheet" href="https://cdn.datatables.net/1.10.21/css/jquery.dataTables.min.css">'
+    html_content += '<script>$(document).ready(function(){$("#data_table").DataTable();});</script></head>'
+    html_content += '<body><table id="data_table" class="display" style="width:100%"><thead><tr>'
+    html_content += '<th>ID</th><th>Name</th><th>Date of Birth</th><th>Date of Death</th><th>Life Span</th></tr></thead><tbody>'
+    for _, row in data_frame.iterrows():
+        html_content += f'<tr><td>{row["abcd_id"]}</td><td>{row["name"]}</td><td>{row.get("Date of Birth", "")}</td><td>{row.get("Date of Death", "")}</td><td>{row.get("Life Span", "")}</td></tr>'
+    html_content += '</tbody></table></body></html>'
+    with tempfile.NamedTemporaryFile('w', delete=False, suffix='.html') as f:
+        f.write(html_content)
+        webbrowser.open('file://' + f.name)
+
+
 
 '''
 Play Audio
@@ -2435,13 +2506,15 @@ def raiseFrame(frame):
     elif frame == "all_audio_frame":
         all_audio_frame.tkraise()
         all_audio_button.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
         root.title("Project ABCD Word Analysis")
     elif frame == "DOB_Analyzer_frame":
         DOB_Analyzer_frame.tkraise()
         word_analysis_button.tkraise()
         word_analysis_back_button.tkraise()
-        text_field_UPLOAD.tkraise()
         UPLOAD_FILE_button.tkraise()
+        # UPLOAD_FILE_button.tkraise()
         root.title("Project ABCD Word Analysis")
     elif frame == 'word_puzzle_frame':
         word_puzzle_frame.tkraise()
@@ -3091,19 +3164,14 @@ DOB_Analyzer_frame.grid(row=0, column=0, sticky='news')
 #--------------------------------DOB Analayser Buttons-----------------------------------------------------------------------------------------------
 # button frame
 DOB_Analayser_button_frame = tk.Frame(DOB_Analyzer_frame)
+data_frame = pd.DataFrame()  # Initialize an empty DataFrame
 
-
-# Create an Entry widget for displaying the filename
-text_field_UPLOAD = tk.Entry(root)
-text_field_UPLOAD.place(x=230, y=60, relwidth=.3, height=50)
-
-# Create a Button to trigger the file upload
-UPLOAD_FILE_button = tk.Button(root, text="Upload File", command=uploadFilename, bg="#007FFF", fg="#ffffff")
+# # Create a Button to trigger the file upload
+UPLOAD_FILE_button = tk.Button(root, text="Upload File", command=upload_file, bg="#007FFF", fg="#ffffff")
 UPLOAD_FILE_button.place(x=500, y=60, relwidth=.1, height=50)
 
-
 # DOB Analayser report button
-DOB_Analayser_report_button = tk.Button(DOB_Analayser_button_frame, text="Generate HTML", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+DOB_Analayser_report_button = tk.Button(DOB_Analayser_button_frame, text="Generate HTML", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=generate_html)
 # back button
 DOB_Analayser_back_button = tk.Button(DOB_Analayser_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
 
