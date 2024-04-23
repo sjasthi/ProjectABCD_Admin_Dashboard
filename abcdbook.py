@@ -23,6 +23,13 @@ import requests
 import pyttsx3
 from gtts import gTTS
 from tkinter import filedialog
+from pptx.util import Inches, Pt
+from pptx.enum.text import PP_ALIGN
+from pptx.dml.color import RGBColor
+from pptx import Presentation
+from pptx.enum.shapes import MSO_CONNECTOR
+from pptx.shapes.connector import Connector
+from pptx.enum.shapes import MSO_SHAPE 
 
 # pip install googletrans
 # pip install googletrans==4.0.0-rc1
@@ -1823,20 +1830,22 @@ def wordsearchCreator(words_for_puzzles):
     for id, words_string in words_for_puzzles.items():
         word_list = words_string.replace(',', '').replace("'", "").upper().split()
         word_lists[id] = word_list
-        grid_size = int(puz_width_var.get())  # Ensure this is correctly fetched
+        grid_size = int(puz_width_var.get())  # Get grid size
         grid = [['-' for _ in range(grid_size)] for _ in range(grid_size)]
         answer_positions = {}
 
         for word in word_list:
-            placed, positions = placeWord(grid, word)  # This function needs to be adapted to return start and end points too
+            placed, positions = placeWord(grid, word)
             if placed:
-                answer_positions[word] = {'start': positions[0], 'end': positions[-1]}
+                # Store all positions, not just start and end
+                answer_positions[word] = positions
 
         fillEmptySpots(grid)
         puzzles[id] = grid
         answer_keys[id] = answer_positions
     
     return puzzles, answer_keys, word_lists
+
 
 
 #function to randomly place words in the grid
@@ -1917,6 +1926,7 @@ def createWordsearchWordsHtml(puzzles, answer_keys, word_lists):
             border-collapse: collapse;
             margin: 20px 0;
             position: relative;
+            border: 1px solid red; /* Temporary for alignment checking */
         }
         td {
             border: 1px solid #666;
@@ -1924,38 +1934,19 @@ def createWordsearchWordsHtml(puzzles, answer_keys, word_lists):
             height: 20px;
             text-align: center;
             vertical-align: middle;
+            box-sizing: border-box;
+            color: black; /* Default text color */
         }
-        .highlighted {
-            font-weight: bold;  /* Make the text bold */
-            color: black;  /* Ensure the text is black */
-        }
-        .answer-line {
-            position: absolute;
-            stroke: red;
-            stroke-width: 2;
-            marker-end: url(#arrowhead);
-        }
-        .svg-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;  /* Allows clicks to pass through to the table */
+        .answer-text {
+            color: blue; /* Change the text color to blue */
+            font-weight: bold; /* Make answer text bold */
         }
     </style>
     </head>
     <body>
-    <svg style="display:none;">
-        <defs>
-            <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
-                <path d="M0,0 L0,6 L9,3 z" fill="red" />
-            </marker>
-        </defs>
-    </svg>
     """
 
-    # Generate regular puzzles with word lists
+    # Regular puzzles and word lists
     for id, grid in puzzles.items():
         html_content += f"<div class='page'><h2>Page No: {page} - Puzzle ID: {id}</h2><table>"
         for row in grid:
@@ -1969,37 +1960,25 @@ def createWordsearchWordsHtml(puzzles, answer_keys, word_lists):
         html_content += "</ul></div></div>"
         page += 1
 
-    # Generate answer key puzzles and draw SVG lines directly for each word
+    # Answer key puzzles with text color change for answers only
     for id, positions in answer_keys.items():
         grid = puzzles[id]
-        html_content += f"<div class='page'><h2>Answer Key Page No: {page} - Puzzle ID: {id}</h2><div style='position: relative;'>"
-        html_content += "<table>"
+        html_content += f"<div class='page'><h2>Answer Key Page No: {page} - Puzzle ID: {id}</h2><table>"
+        flat_positions = set(sum(positions.values(), []))  # Flatten list of tuples from all words into a set for quick lookup
         for row_idx, row in enumerate(grid):
             html_content += "<tr>"
             for col_idx, cell in enumerate(row):
-                if (row_idx, col_idx) in positions:
-                    html_content += f"<td class='highlighted'>{cell}</td>"
+                # Apply the 'answer-text' class if the cell position is in the flat list of answer positions
+                if (row_idx, col_idx) in flat_positions:
+                    html_content += f"<td class='answer-text'>{cell}</td>"
                 else:
                     html_content += f"<td>{cell}</td>"
             html_content += "</tr>"
-        html_content += "</table>"
-
-        # SVG overlay for drawing lines
-        html_content += "<div class='svg-container'><svg style='width: 100%; height: 100%;'>"
-        for word, pos in positions.items():
-            start = pos['start']
-            end = pos['end']
-            start_x = start[1] * 20 + 10
-            start_y = start[0] * 20 + 10
-            end_x = end[1] * 20 + 10
-            end_y = end[0] * 20 + 10
-            html_content += f"<line x1='{start_x}' y1='{start_y}' x2='{end_x}' y2='{end_y}' class='answer-line'></line>"
-        html_content += "</svg></div></div>"
+        html_content += "</table></div>"
         page += 1
 
     html_content += "</body></html>"
     return html_content
-
 
 
 
@@ -2028,21 +2007,15 @@ def save_and_display_html(html_content, base_filename="puzzles_package"):
     except Exception as e:
         print(f"Failed to open the HTML file in a web browser. Error: {e}")
         
-from pptx.util import Inches, Pt
-from pptx.enum.shapes import MSO_SHAPE
-from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_CONNECTOR
-
-
-def add_puzzle_table(slide, grid, word_list, title_text, answer_positions=None):
+def add_puzzle_table(slide, grid, word_list, title_text, max_width, max_height, answer_positions=None):
     title = slide.shapes.title
     title.text = title_text
 
     rows, cols = len(grid), len(grid[0])
-    grid_origin_x = Inches(1)  
-    grid_origin_y = Inches(1.5)  
-    max_width = Inches(6)  
-    max_height = Inches(4.5)  # Total available height for the grid
+    grid_origin_x = Inches(1)
+    grid_origin_y = Inches(1.5)
+
+    # Calculate the cell width and height based on the max dimensions provided
     cell_width = max_width / cols
     cell_height = max_height / rows
 
@@ -2054,22 +2027,27 @@ def add_puzzle_table(slide, grid, word_list, title_text, answer_positions=None):
         for c in range(cols):
             cell = table.cell(r, c)
             cell.text = grid[r][c]
-            cell.text_frame.paragraphs[0].font.size = Pt(10)
-            cell.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+            p = cell.text_frame.paragraphs[0]
+            p.font.size = Pt(10)  # Adjust this based on space available
+            p.alignment = PP_ALIGN.CENTER
+            if answer_positions and any((r, c) in positions for positions in answer_positions.values()):
+                p.font.color.rgb = RGBColor(255, 0, 0)  # Red for answer cells 
 
-    # Add lines for correct answers
+    # Add lines for correct answers using direct line drawing
     if answer_positions:
-        for word, pos in answer_positions.items():
-            start_cell = pos['start']
-            end_cell = pos['end']
-            start_x = grid_origin_x + start_cell[1] * cell_width + cell_width / 2
-            start_y = grid_origin_y + start_cell[0] * cell_height + cell_height / 2
-            end_x = grid_origin_x + end_cell[1] * cell_width + cell_width / 2
-            end_y = grid_origin_y + end_cell[0] * cell_height + cell_height / 2
+        for positions in answer_positions.values():
+            for i in range(len(positions)-1):
+                start_cell = positions[i]
+                end_cell = positions[i+1]
+                start_x = grid_origin_x + start_cell[1] * cell_width + cell_width / 2
+                start_y = grid_origin_y + start_cell[0] * cell_height + cell_height / 2
+                end_x = grid_origin_x + end_cell[1] * cell_width + cell_width / 2
+                end_y = grid_origin_y + end_cell[0] * cell_height + cell_height / 2
 
-            line = slide.shapes.add_shape(MSO_SHAPE.LINE_INVERSE, start_x, start_y, end_x, end_y)
-            line.line.width = Pt(2)
-            line.line.color.rgb = RGBColor(255, 0, 0)  # Set line color to red
+                # Draw direct lines instead of using connectors
+                line = slide.shapes.add_shape(MSO_SHAPE.LINE_INVERSE, start_x, start_y, end_x - start_x, end_y - start_y)
+                line.line.width = Pt(2)
+                line.line.color.rgb = RGBColor(255, 0, 0)  # Set line color to red
 
     # Add word list to the side
     textbox = slide.shapes.add_textbox(Inches(7.5), Inches(1.5), Inches(2), Inches(4))
@@ -2081,18 +2059,23 @@ def add_puzzle_table(slide, grid, word_list, title_text, answer_positions=None):
 
 
 
+
 def make_powerpoint(puzzles, answer_keys, word_lists):
     prs = Presentation()
-    for id, grid in puzzles.items():
-        slide = prs.slides.add_slide(prs.slide_layouts[5])  # Use a blank layout
-        add_puzzle_table(slide, grid, word_lists[id], f"Puzzle ID: {id}")
+    max_width = Inches(6)  # Set the maximum width for the grid
+    max_height = Inches(4.5)  # Set the maximum height for the grid
 
-    # Add a slide for each answer key
+    for id, grid in puzzles.items():
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
+        add_puzzle_table(slide, grid, word_lists[id], f"Puzzle ID: {id}", max_width, max_height)
+
     for id, positions in answer_keys.items():
-        slide = prs.slides.add_slide(prs.slide_layouts[5])  # Use a blank layout
-        add_puzzle_table(slide, puzzles[id], word_lists[id], f"Answer Key ID: {id}", answer_positions=positions)
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
+        add_puzzle_table(slide, puzzles[id], word_lists[id], f"Answer Key ID: {id}", max_width, max_height, answer_positions=positions)
 
     return prs
+
+
 
 
 
