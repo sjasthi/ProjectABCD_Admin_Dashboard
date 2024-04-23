@@ -21,7 +21,11 @@ from localspelling import convert_spelling
 from localspelling.spelling_converter import get_dictionary 
 import requests
 import pyttsx3
+import webbrowser
+import tempfile
+import datetime
 from gtts import gTTS
+
 from tkinter import filedialog
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
@@ -1560,30 +1564,41 @@ def first_person_pptx(first_person_text):
             dress_description = first_person_text[id].get('description', '')
             dress_did_you_know = first_person_text[id].get('did_you_know', '')
 
+            dress_description_len = len(dress_description)
+
+
+
             #--------------------------------Portrait--------------------------------
-            # PORTRAIT MODE
             prs.slide_width = pptx.util.Inches(7.5) # define slide width
             prs.slide_height = pptx.util.Inches(10.83) # define slide height
             slide_layout = prs.slide_layouts[5] # use slide with only title
             slide_layout2 = prs.slide_layouts[6] # use empty slide
 
-            slide_empty = prs.slides.add_slide(slide_layout2) 
             slide_title = prs.slides.add_slide(slide_layout) 
 
-            add_image(slide_empty, dress_data, 0, 0)
-            #image_width_px = int(pic_width_var.get())
-            #image_height_px = int(pic_height_var.get())
-            #image_width_inch = image_width_px / 96
-            #image_height_inch = image_height_px / 96
-            #picture = slide_title.shapes.add_picture(f'./images/Slide{id}.png', 0, Inches(0.83), Inches(image_width_inch), Inches(image_height_inch))
-            add_title_box(slide_title, dress_name, 0, 0.15, 7.5, 0.91) 
-            add_subtitle_highlight(slide_title, 0.37, 1.58, 2.44, 0.3) # description - highlight box
-            add_description_subtitle(slide_title, 0.28, 1.07, 6.94, 0.51)
-            add_description_text(slide_title, dress_description, 0.28, 1.65, 6.94, 5.99)
-            add_subtitle_highlight(slide_title, 0.37, 8.36, 2.78, 0.3) # did you know - highlight box
-            add_did_you_know_subtitle(slide_title, 0.28, 7.87, 6.94, 0.51)
-            add_did_you_know_text(slide_title, dress_did_you_know, 0.28, 8.46, 6.94, 1.04)
-            #add_numbering(slide_title, dress_info, id, 4.47, 10.06, 1.28, 0.34, 5.94, 10.06, 1.28, 0.34)
+            add_image(slide_title, dress_data, 0, 1.39)
+            add_title_box(slide_title, dress_name, 0, 0.09, 7.5, 0.91) 
+            add_subtitle_highlight(slide_title, 3.71, 1.21, 1.83, 0.23) # description - highlight box
+            add_description_subtitle(slide_title, 3.63, 0.88, 3.71, 0.37)
+            add_description_text(slide_title, dress_description, 3.63, 1.35, 3.71, 7.57)
+
+                # adjust the text height based on text length
+            if dress_description_len < 600:
+                add_subtitle_highlight(slide_title, 3.72, 5.83, 1.83, 0.23) # did you know - highlight box
+                add_did_you_know_subtitle(slide_title, 3.63, 5.42, 3.71, 0.37)
+                add_did_you_know_text(slide_title, dress_did_you_know, 3.63, 5.94, 3.71, 0.91)
+
+            elif dress_description_len > 600 and dress_description_len < 1300:
+                add_subtitle_highlight(slide_title, 3.72, 7.99, 1.83, 0.23) # did you know - highlight box
+                add_did_you_know_subtitle(slide_title, 3.63, 7.58, 3.71, 0.37)
+                add_did_you_know_text(slide_title, dress_did_you_know, 3.63, 8.1, 3.71, 0.91)
+                
+            else:
+                add_subtitle_highlight(slide_title, 3.72, 9.32, 1.83, 0.23) # did you know - highlight box
+                add_did_you_know_subtitle(slide_title, 3.63, 8.91, 3.71, 0.37)
+                add_did_you_know_text(slide_title, dress_did_you_know, 3.63, 9.43, 3.71, 0.91)
+
+            #add_numbering(slide_title, dress_info, id, 0.49, 6.46, 1.33, 0.27, 1.95, 6.46, 1.33, 0.27)
             complete += 1
             #pb['value'] = (complete/len(first_person_text))*100 # calculate percentage of images downloaded
             #percent_label.config(text=f'Creating Book...{int(pb["value"])}%')
@@ -2120,14 +2135,87 @@ def generate_word_search_package():
     save_powerpoint(prs, base_filename="word_puzzles_package")
     print("PowerPoint word puzzles have been generated and saved.")
 
+
+
+
+
+
 '''
-Upload File
+    ##DOB Analayser Methods
 '''
-def uploadFilename():
-    filename = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
-    if filename:
-        text_field_UPLOAD.delete(0, tk.END) 
-        text_field_UPLOAD.insert(0, filename)
+def parse_dates(dates):
+    if pd.isna(dates) or dates.strip() in ["TBD", "Unknown", "Not Applicable", ""]:
+        # print(f"Skipping date parsing due to non-date info: {dates}")
+        return None, None
+
+    # Normalize and clean the date string
+    dates = dates.replace('(', '').replace(')', '').replace('circa', '').replace('c.', '').replace('around', '').strip()
+    dates = dates.replace(' – ', '-').replace(' to ', '-').replace('–', '-').replace('/', '-')
+
+    # Split and strip the date parts
+    try:
+        split_dates = [date.strip() for date in dates.split('-') if date.strip()]
+        birth_date = parse_single_date(split_dates[0])
+        death_date = parse_single_date(split_dates[1]) if len(split_dates) > 1 else None
+    except Exception as e:
+        return None, None
+
+    return birth_date, death_date
+
+def parse_single_date(date_str):
+    try:
+        return datetime.datetime.strptime(date_str, '%d %B %Y').date()
+    except ValueError:
+        try:
+            return datetime.datetime.strptime(date_str, '%B %d, %Y').date()
+        except ValueError:
+            return None
+
+def calculate_life_span(birth_date, death_date):
+    if not birth_date:
+        return "Birth date unknown"
+    if not death_date:
+        return "Still living"  # Or adjust according to your preference
+    try:
+        life_span = death_date.year - birth_date.year
+        life_span -= ((death_date.month, death_date.day) < (birth_date.month, birth_date.day))
+        return life_span
+    except Exception as e:
+        return ""
+
+def load_data(file_path):
+    data = pd.read_excel(file_path)
+    data['Parsed Dates'] = data['Dates'].apply(parse_dates)
+    data[['Date of Birth', 'Date of Death']] = pd.DataFrame(data['Parsed Dates'].tolist(), index=data.index)
+    data['Life Span'] = data.apply(lambda row: calculate_life_span(row['Date of Birth'], row['Date of Death']), axis=1)
+    return data[['name', 'abcd_id', 'Date of Birth', 'Date of Death', 'Life Span']]
+
+def upload_file():
+    file_path = filedialog.askopenfilename()
+    if file_path:
+        global data_frame
+        data_frame = load_data(file_path)
+        print("File uploaded and processed successfully.")
+
+def generate_html():
+    if data_frame.empty:
+        # print("No data to display.")
+        return
+    html_content = '<html><head><title>Excel Data</title>'
+    html_content += '<script src="https://code.jquery.com/jquery-3.5.1.js"></script>'
+    html_content += '<script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>'
+    html_content += '<link rel="stylesheet" href="https://cdn.datatables.net/1.10.21/css/jquery.dataTables.min.css">'
+    html_content += '<script>$(document).ready(function(){$("#data_table").DataTable();});</script></head>'
+    html_content += '<body><table id="data_table" class="display" style="width:100%"><thead><tr>'
+    html_content += '<th>ID</th><th>Name</th><th>Date of Birth</th><th>Date of Death</th><th>Life Span</th></tr></thead><tbody>'
+    for _, row in data_frame.iterrows():
+        html_content += f'<tr><td>{row["abcd_id"]}</td><td>{row["name"]}</td><td>{row.get("Date of Birth", "")}</td><td>{row.get("Date of Death", "")}</td><td>{row.get("Life Span", "")}</td></tr>'
+    html_content += '</tbody></table></body></html>'
+    with tempfile.NamedTemporaryFile('w', delete=False, suffix='.html') as f:
+        f.write(html_content)
+        webbrowser.open('file://' + f.name)
+
+
 
 '''
 Play Audio
@@ -2418,13 +2506,15 @@ def raiseFrame(frame):
     elif frame == "all_audio_frame":
         all_audio_frame.tkraise()
         all_audio_button.tkraise()
+        text_field_label.tkraise()
+        text_field.tkraise()
         root.title("Project ABCD Word Analysis")
     elif frame == "DOB_Analyzer_frame":
         DOB_Analyzer_frame.tkraise()
         word_analysis_button.tkraise()
         word_analysis_back_button.tkraise()
-        text_field_UPLOAD.tkraise()
         UPLOAD_FILE_button.tkraise()
+        # UPLOAD_FILE_button.tkraise()
         root.title("Project ABCD Word Analysis")
     elif frame == 'word_puzzle_frame':
         word_puzzle_frame.tkraise()
@@ -3074,19 +3164,14 @@ DOB_Analyzer_frame.grid(row=0, column=0, sticky='news')
 #--------------------------------DOB Analayser Buttons-----------------------------------------------------------------------------------------------
 # button frame
 DOB_Analayser_button_frame = tk.Frame(DOB_Analyzer_frame)
+data_frame = pd.DataFrame()  # Initialize an empty DataFrame
 
-
-# Create an Entry widget for displaying the filename
-text_field_UPLOAD = tk.Entry(root)
-text_field_UPLOAD.place(x=230, y=60, relwidth=.3, height=50)
-
-# Create a Button to trigger the file upload
-UPLOAD_FILE_button = tk.Button(root, text="Upload File", command=uploadFilename, bg="#007FFF", fg="#ffffff")
+# # Create a Button to trigger the file upload
+UPLOAD_FILE_button = tk.Button(root, text="Upload File", command=upload_file, bg="#007FFF", fg="#ffffff")
 UPLOAD_FILE_button.place(x=500, y=60, relwidth=.1, height=50)
 
-
 # DOB Analayser report button
-DOB_Analayser_report_button = tk.Button(DOB_Analayser_button_frame, text="Generate HTML", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
+DOB_Analayser_report_button = tk.Button(DOB_Analayser_button_frame, text="Generate HTML", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=generate_html)
 # back button
 DOB_Analayser_back_button = tk.Button(DOB_Analayser_button_frame, text="Back", font=LABEL_FONT, width=25, height=1, bg="#007FFF", fg="#ffffff", command=lambda: raiseFrame('main_frame'))
 
