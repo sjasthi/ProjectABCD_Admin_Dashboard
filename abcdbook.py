@@ -2043,10 +2043,10 @@ def add_puzzle_table(slide, grid, word_list, title_text, max_width, max_height, 
             cell = table.cell(r, c)
             cell.text = grid[r][c]
             p = cell.text_frame.paragraphs[0]
-            p.font.size = Pt(10)  # Adjust this based on space available
+            p.font.size = Pt(10)  
             p.alignment = PP_ALIGN.CENTER
             if answer_positions and any((r, c) in positions for positions in answer_positions.values()):
-                p.font.color.rgb = RGBColor(255, 0, 0)  # Red for answer cells 
+                p.font.color.rgb = RGBColor(255, 0, 0)  
 
     # Add lines for correct answers using direct line drawing
     if answer_positions:
@@ -2059,10 +2059,10 @@ def add_puzzle_table(slide, grid, word_list, title_text, max_width, max_height, 
                 end_x = grid_origin_x + end_cell[1] * cell_width + cell_width / 2
                 end_y = grid_origin_y + end_cell[0] * cell_height + cell_height / 2
 
-                # Draw direct lines instead of using connectors
+                
                 line = slide.shapes.add_shape(MSO_SHAPE.LINE_INVERSE, start_x, start_y, end_x - start_x, end_y - start_y)
                 line.line.width = Pt(2)
-                line.line.color.rgb = RGBColor(255, 0, 0)  # Set line color to red
+                line.line.color.rgb = RGBColor(255, 0, 0)  
 
     # Add word list to the side
     textbox = slide.shapes.add_textbox(Inches(7.5), Inches(1.5), Inches(2), Inches(4))
