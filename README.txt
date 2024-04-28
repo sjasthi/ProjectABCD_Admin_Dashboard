@@ -1,5 +1,9 @@
 TO DO: Install/Run the following in your terminal before running code
 
+-- run -- 
+pip install -r requirements.txt
+Note: It should install all the necescsary modules. If not install the ones it didn't get manually.
+
 -- tkinter --
 pip install tk
 
