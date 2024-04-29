@@ -2022,7 +2022,7 @@ def save_and_display_html(html_content, base_filename="puzzles_package"):
     except Exception as e:
         print(f"Failed to open the HTML file in a web browser. Error: {e}")
         
-def add_puzzle_table(slide, grid, word_list, title_text, max_width, max_height, answer_positions=None):
+def add_puzzle_table(slide, grid, word_list, title_text, max_width, max_height, answer_positions=None, draw_lines = True):
     title = slide.shapes.title
     title.text = title_text
 
@@ -2038,32 +2038,38 @@ def add_puzzle_table(slide, grid, word_list, title_text, max_width, max_height, 
     table = slide.shapes.add_table(rows, cols, grid_origin_x, grid_origin_y, round(cell_width * cols), round(cell_height * rows)).table
     table.first_row = False
 
+    last_positions = {}
+
     for r in range(rows):
         for c in range(cols):
             cell = table.cell(r, c)
             cell.text = grid[r][c]
             p = cell.text_frame.paragraphs[0]
-            p.font.size = Pt(10)  
+            p.font.size = Pt(10)
             p.alignment = PP_ALIGN.CENTER
+
+            # Check if current cell is part of any answer and highlight
             if answer_positions and any((r, c) in positions for positions in answer_positions.values()):
                 p.font.color.rgb = RGBColor(255, 0, 0)  
+                cell.fill.solid()  
+                cell.fill.fore_color.rgb = RGBColor(255, 255, 0) 
 
-    # Add lines for correct answers using direct line drawing
-    if answer_positions:
-        for positions in answer_positions.values():
-            for i in range(len(positions)-1):
-                start_cell = positions[i]
-                end_cell = positions[i+1]
-                start_x = grid_origin_x + start_cell[1] * cell_width + cell_width / 2
-                start_y = grid_origin_y + start_cell[0] * cell_height + cell_height / 2
-                end_x = grid_origin_x + end_cell[1] * cell_width + cell_width / 2
-                end_y = grid_origin_y + end_cell[0] * cell_height + cell_height / 2
+                if draw_lines:
+                # Manage line drawing by identifying the word associated with this cell
+                    for word, positions in answer_positions.items():
+                        if (r, c) in positions:
+                            # Draw line from previous position to current position if exists
+                            if word in last_positions:
+                                prev_r, prev_c = last_positions[word]
+                                start_x = grid_origin_x + prev_c * cell_width + cell_width / 2
+                                start_y = grid_origin_y + prev_r * cell_height + cell_height / 2
+                                end_x = grid_origin_x + c * cell_width + cell_width / 2
+                                end_y = grid_origin_y + r * cell_height + cell_height / 2
+                                draw_line(slide, start_x, start_y, end_x, end_y)
 
-                
-                line = slide.shapes.add_shape(MSO_SHAPE.LINE_INVERSE, start_x, start_y, end_x - start_x, end_y - start_y)
-                line.line.width = Pt(2)
-                line.line.color.rgb = RGBColor(255, 0, 0)  
-
+                            # Update last position for the current word
+                            last_positions[word] = (r, c) 
+    
     # Add word list to the side
     textbox = slide.shapes.add_textbox(Inches(7.5), Inches(1.5), Inches(2), Inches(4))
     tf = textbox.text_frame
@@ -2073,12 +2079,15 @@ def add_puzzle_table(slide, grid, word_list, title_text, max_width, max_height, 
     p.font.size = Pt(14)
 
 
+def draw_line(slide, start_x, start_y, end_x, end_y):
+    line = slide.shapes.add_shape(MSO_SHAPE.LINE_INVERSE, start_x, start_y, end_x - start_x, end_y - start_y)
+    line.line.width = Pt(2)
+    line.line.color.rgb = RGBColor(255, 0, 0)
 
-
-def make_powerpoint(puzzles, answer_keys, word_lists):
+def make_powerpoint(puzzles, answer_keys, word_lists,draw_lines):
     prs = Presentation()
-    max_width = Inches(6)  # Set the maximum width for the grid
-    max_height = Inches(4.5)  # Set the maximum height for the grid
+    max_width = Inches(6)  
+    max_height = Inches(4.5)  
 
     for id, grid in puzzles.items():
         slide = prs.slides.add_slide(prs.slide_layouts[5])
@@ -2086,7 +2095,7 @@ def make_powerpoint(puzzles, answer_keys, word_lists):
 
     for id, positions in answer_keys.items():
         slide = prs.slides.add_slide(prs.slide_layouts[5])
-        add_puzzle_table(slide, puzzles[id], word_lists[id], f"Answer Key ID: {id}", max_width, max_height, answer_positions=positions)
+        add_puzzle_table(slide, puzzles[id], word_lists[id], f"Answer Key ID: {id}", max_width, max_height, answer_positions=positions, draw_lines = draw_lines)
 
     return prs
 
@@ -2128,8 +2137,9 @@ def generate_word_search_package():
     save_and_display_html(html_puzzles)
     print("HTML word puzzles have been generated and saved.")
 
-   
-    prs = make_powerpoint(puzzles, answer_keys, word_lists)
+    draw_lines = draw_lines_var.get()
+    
+    prs = make_powerpoint(puzzles, answer_keys, word_lists, draw_lines)
 
     
     save_powerpoint(prs, base_filename="word_puzzles_package")
@@ -2326,6 +2336,7 @@ def startGenerateBookThread():
     book_gen_generate_button.config(state="disabled")
     generate_thread = threading.Thread(target=generateBook)
     generate_thread.start()
+    book_gen_generate_button.config(state = "normal")
 
 '''
 Spins up new thread to run diffReport function
@@ -2334,6 +2345,7 @@ def startDiffReportThread():
     diff_report_button.config(state='disabled')
     diff_report_thread = threading.Thread(target=diffReport)
     diff_report_thread.start()
+    diff_report_button.config(state = "normal")
 
 '''
 Spins up new thread to run wordAnalysis function
@@ -2342,6 +2354,7 @@ def startWordAnalysisThread():
     word_analysis_button.config(state='disabled')
     word_analysis_thread = threading.Thread(target=wordAnalysis)
     word_analysis_thread.start()
+    word_analysis_button.config(state = "normal")
 
 '''
 Spins up new thread to run googleImage function
@@ -2350,6 +2363,7 @@ def startGoogleImageThread():
     google_image_search_button.config(state='disabled')
     google_image_search_thread = threading.Thread(target=googleImage)
     google_image_search_thread.start()
+    google_image_search_button.config(state = "normal")
 
 '''
 Spins up new thread to run generateWikiLink function
@@ -2358,6 +2372,7 @@ def startGenerateWikiLinkThread():
     wiki_link_gen_button.config(state='disabled')
     wiki_link_thread = threading.Thread(target=generateWikiLink)
     wiki_link_thread.start()
+    wiki_link_gen_button.config(state = "normal")
 
 '''
 Spins up new thread to run generatePairs function
@@ -2366,6 +2381,7 @@ def startGeneratePairsThread():
     who_are_my_pairs_gen_button.config(state='disabled')
     who_are_my_pairs_thread = threading.Thread(target=generatePairs)
     who_are_my_pairs_thread.start()
+    who_are_my_pairs_gen_button.config(state = "normal")
 
 '''
 Spins up new thread to run us/uk_spellings function
@@ -2374,6 +2390,7 @@ def startUS_UK_SpellingsThread():
     us_uk_spellings_button.config(state="disabled")
     us_uk_spellings_thread = threading.Thread(target=generate_us_uk_spellings)
     us_uk_spellings_thread.start()
+    us_uk_spellings_button.config(state = "normal")
 
 '''
 Spins up new thread to run ids of us/uk_spellings function
@@ -2382,6 +2399,7 @@ def startIDs_Of_US_UK_SpellingsThread():
     ids_of_us_uk_spellings_button.config(state="disabled")
     ids_of_us_uk_spellings_thread = threading.Thread(target=generate_IDs_Of_us_uk_spellings)
     ids_of_us_uk_spellings_thread.start()
+    ids_of_us_uk_spellings_button.config(state = "normal")
 
 
 '''
@@ -2391,6 +2409,7 @@ def startTranslationPackageThread():
     translation_package_generate_button.config(state="disabled")
     translate_package_thread = threading.Thread(target=generate_translation_package)
     translate_package_thread.start()
+    translation_package_generate_button.config(state = "normal")
 
 '''
 Spins up new thread to run translate_to_first person function
@@ -2399,6 +2418,7 @@ def startFirstPersonThread():
     first_person_generate_button.config(state="disabled")
     first_person_thread = threading.Thread(target=generate_first_person_package)
     first_person_thread.start()
+    first_person_generate_button.config(state = "normal")
 
 '''
 Spins up new thread to run playAudio function
@@ -2407,6 +2427,7 @@ def playAudioThread():
     get_audio_button.config(state='disabled')
     get_audio_thread = threading.Thread(target=playAudio)
     get_audio_thread.start()
+    get_audio_button.config(state = "normal")
 
 '''
 Spins up new thread to run saveAudio function
@@ -2415,6 +2436,7 @@ def saveAudioThread():
     get_audio_button.config(state='disabled')
     get_audio_thread = threading.Thread(target=saveAudio)
     get_audio_thread.start()
+    get_audio_button.config(state = "normal")
 '''
 Spins up new thread to run word search function
 '''
@@ -2422,6 +2444,7 @@ def startWordPuzzleThread():
     word_puzzle_generate_button.config(state="disabled")
     word_search_thread = threading.Thread(target=generate_word_search_package)
     word_search_thread.start()
+    word_puzzle_generate_button.config(state="normal")
 
 
 '''
@@ -3200,66 +3223,6 @@ word_puzzle_back_button.pack(side="left", padx=30)
 # place button frame on <something>
 word_puzzle_button_frame.pack(side="bottom", pady=10)
 
-#--------------------------------Layout Radio Buttons-------------------------------------------------------------------------------------
-# layout variable
-layout = tk.IntVar()
-layout.set(4)
-
-# layout frame
-layout_frame = tk.Frame(word_puzzle_frame)
-# layout radio buttons
-layout_radio4 = tk.Radiobutton(layout_frame, text="Puzzle on Left - Text on right - Single Page - Portrait Mode",
-                                font=MAIN_FONT, variable=layout, value=4)
-layout_radio1 = tk.Radiobutton(layout_frame, text="Puzzle on Left Page - Text on Right Page - Two Page Mode - Portrait Mode",
-                                font=MAIN_FONT, variable=layout, value=1)
-layout_radio2 = tk.Radiobutton(layout_frame, text="Puzzle on Right - Text on Left - Single Page - Landscape Mode",
-                                font=MAIN_FONT, variable=layout, value=2)
-layout_radio3 = tk.Radiobutton(layout_frame, text="Puzzle on Left - Text on Right - Single Page - Landscape Mode",
-                                font=MAIN_FONT, variable=layout, value=3)
-# pack radio buttons into layout frame
-layout_radio4.pack(anchor="nw")
-layout_radio1.pack(anchor="nw")
-layout_radio2.pack(anchor="nw")
-layout_radio3.pack(anchor="nw")
-# place layout frame on main frame
-layout_frame.place(x=175, y=150, width=800)
-# layout radio buttons label
-layout_label = tk.Label(word_puzzle_frame, text="Layout:", font=LABEL_FONT)
-layout_label.place(x=25, y=170)
-
-# separator line
-separator1 = ttk.Separator(word_puzzle_frame)
-separator1.place(x=175, y=150, relwidth=.8)
-
-#--------------------------------Sort Radio Buttons---------------------------------------------------------------------------------------
-# sort variable
-sort_order = tk.IntVar()
-sort_order.set(1)
-
-# sort frame
-sort_frame = tk.Frame(word_puzzle_frame)
-# sort radio buttons
-sort_radio1 = tk.Radiobutton(sort_frame, text="By Name", font=MAIN_FONT, variable=sort_order, value=1)
-sort_radio2 = tk.Radiobutton(sort_frame, text="By ID", font=MAIN_FONT, variable=sort_order, value=2)
-sort_radio3 = tk.Radiobutton(sort_frame, text="By Input Order", font=MAIN_FONT, variable=sort_order, value=3)
-# pack radio buttons into sort frame
-sort_radio1.pack(side="left")
-sort_radio2.pack(side="left")
-sort_radio3.pack(side="left")
-# place sort frame on main frame
-sort_frame.place(x=175, y=265, width=800)
-
-# sort radio buttons label
-sort_label = tk.Label(word_puzzle_frame, text="Sort Order:", font=LABEL_FONT)
-sort_label.place(x=25, y=265)
-
-
-# separator line
-separator2 = ttk.Separator(word_puzzle_frame)
-separator2.place(x=175, y=265, relwidth=.8)
-
-#--------------------------------Word Radio Buttons---------------------------------------------------------------------------------------
-
 #--------------------------------Preferences----------------------------------------------------------------------------------------------
 preferences = {
     "WORD_COUNT": "10",
@@ -3270,21 +3233,35 @@ preferences = {
 word_count_var = tk.StringVar(value=preferences["WORD_COUNT"])
 puz_width_var = tk.StringVar(value=preferences["PUZ_WIDTH"])
 
-# Frame for preference settings
+# BooleanVar for line drawing preference
+draw_lines_var = tk.BooleanVar(value=True)  # Default is True
+
+
+
 preferences_frame = tk.Frame(word_puzzle_frame)
 preferences_frame.place(x=175, y=295, width=800)
 
 # Labels and entries for preferences
 word_count_label = tk.Label(preferences_frame, text="Word Count:", font=MAIN_FONT)
 word_count_label.grid(row=1, column=1, pady=10)
-word_count = tk.Entry(preferences_frame, width=6, textvariable=word_count_var, font=MAIN_FONT)
-word_count.grid(row=1, column=2)
+word_count_entry = tk.Entry(preferences_frame, width=6, textvariable=word_count_var, font=MAIN_FONT)
+word_count_entry.grid(row=1, column=2)
 
 puz_width_label = tk.Label(preferences_frame, text="Puzzle Width:", font=MAIN_FONT)
 puz_width_label.grid(row=2, column=1, pady=10)
-puz_width = tk.Entry(preferences_frame, width=6, textvariable=puz_width_var, font=MAIN_FONT)
-puz_width.grid(row=2, column=2)
+puz_width_entry = tk.Entry(preferences_frame, width=6, textvariable=puz_width_var, font=MAIN_FONT)
+puz_width_entry.grid(row=2, column=2)
 
+# Checkbutton for toggling line drawing
+draw_lines_checkbutton = tk.Checkbutton(
+    preferences_frame,
+    text="Draw Lines",
+    font=LABEL_FONT,
+    variable=draw_lines_var,
+    onvalue=True,
+    offvalue=False
+)
+draw_lines_checkbutton.grid(row=3, column=1, columnspan=2, pady=10)
 
 # Function to apply changes to preferences
 def apply_changes():
@@ -3296,11 +3273,11 @@ def apply_changes():
 apply_button = tk.Button(preferences_frame, text="Apply Changes", command=apply_changes, font=LABEL_FONT)
 apply_button.grid(row=4, column=1, columnspan=2, pady=10)
 
-# preferences label
+# Preferences label
 preferences_label = tk.Label(word_puzzle_frame, text="Preferences:", font=LABEL_FONT)
 preferences_label.place(x=25, y=350)
 
-# separator line
+# Separator line
 separator3 = ttk.Separator(word_puzzle_frame)
 separator3.place(x=175, y=295, relwidth=.8)
 
