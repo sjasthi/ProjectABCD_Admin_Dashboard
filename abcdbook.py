@@ -3234,7 +3234,7 @@ word_count_var = tk.StringVar(value=preferences["WORD_COUNT"])
 puz_width_var = tk.StringVar(value=preferences["PUZ_WIDTH"])
 
 # BooleanVar for line drawing preference
-draw_lines_var = tk.BooleanVar(value=True)  # Default is True
+draw_lines_var = tk.BooleanVar(value=False)  # Default is True
 
 
 
