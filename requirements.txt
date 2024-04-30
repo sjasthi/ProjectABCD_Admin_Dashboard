@@ -1,0 +1,15 @@
+requests==2.31.0
+tk==0.1.0
+python-pptx==0.6.23
+googletrans==4.0.0-rc1
+mysql-connector-python==8.3.0
+mysql-connector==2.2.9
+pandas==2.2.0
+textblob==0.18.0.post0
+textstat==0.7.3
+openai==0.27.7
+gtts==2.5.1
+localspelling==0.94
+Wikipedia-API==0.6.0
+openpyxl==3.1.2
+beautifulsoup4==4.12.3
